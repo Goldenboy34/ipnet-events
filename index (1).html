@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPNET Events</title>
+<meta name="theme-color" content="#0c0918">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--c:#f796cb;--bg:#0c0918;--tx:#f5f2ff;--mu:#b9b2d4;--glass:rgba(255,255,255,.07);--bord:rgba(255,255,255,.14);color-scheme:dark}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--tx);line-height:1.6;min-height:100vh;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:radial-gradient(60rem 40rem at 85% -10%,color-mix(in srgb,var(--c) 38%,transparent),transparent 60%),radial-gradient(45rem 35rem at -10% 30%,rgba(110,80,255,.28),transparent 60%),radial-gradient(40rem 30rem at 60% 110%,color-mix(in srgb,var(--c) 22%,transparent),transparent 60%)}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--c);outline-offset:3px}
+.wrap{max-width:920px;margin:0 auto;padding:1.25rem}
+nav{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;padding:.9rem max(1.25rem,calc((100% - 920px)/2));backdrop-filter:blur(14px);background:rgba(12,9,24,.62);border-bottom:1px solid var(--bord)}
+nav b{font-family:'Unbounded',sans-serif;font-size:1rem}
+nav b::before{content:"";display:inline-block;width:.8rem;height:.8rem;border-radius:50%;background:var(--c);box-shadow:0 0 14px var(--c);margin-right:.6rem}
+nav span a{margin-left:1.2rem;font-weight:500;color:var(--mu);text-decoration:none}
+nav span a:hover{color:var(--tx)}
+h1,h2{font-family:'Unbounded',sans-serif;letter-spacing:-.03em}
+h1{font-size:clamp(2.3rem,9vw,4.9rem);line-height:1.02;font-weight:800;background:linear-gradient(120deg,#fff 30%,color-mix(in srgb,var(--c) 70%,#fff));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:1.25rem;margin:2.4rem 0 1.1rem;font-weight:600}
+.hero{padding:3rem 0 1rem}
+.pill{display:inline-block;padding:.3rem 1rem;border-radius:99px;background:var(--glass);border:1px solid var(--bord);color:var(--mu);font-size:.9rem;margin-bottom:1.1rem}
+.sous{color:var(--mu);font-size:1.15rem;margin-top:1rem;max-width:34rem}
+.quand{font-weight:700;font-size:1.2rem;margin-top:1.1rem}
+.compte{display:flex;gap:.7rem;margin:1.6rem 0 1rem;flex-wrap:wrap}
+.compte div{background:var(--glass);border:1px solid var(--bord);backdrop-filter:blur(10px);border-radius:1.1rem;padding:.7rem 1rem;text-align:center;min-width:5rem;color:var(--mu);font-size:.85rem}
+.compte b{display:block;font-family:'Unbounded',sans-serif;font-size:1.7rem;color:var(--tx)}
+.infos{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.9rem}
+.infos>div{background:var(--glass);border:1px solid var(--bord);border-radius:1.1rem;padding:1rem 1.2rem}
+.infos dt{font-size:.85rem;color:var(--mu)}
+.infos dd{font-weight:700;margin:0}
+.btn,button{font:inherit;font-weight:700;cursor:pointer;padding:.75rem 1.4rem;border-radius:99px;border:1px solid var(--bord);background:var(--glass);color:var(--tx);text-decoration:none;display:inline-block;transition:transform .15s,box-shadow .2s}
+.btn:hover,button:hover{transform:translateY(-2px)}
+.btn.plein,button.plein{background:var(--c);color:#14091f;border-color:transparent;box-shadow:0 8px 30px -8px var(--c)}
+button:disabled{opacity:.6;cursor:wait}
+button.petit{padding:.4rem 1rem;font-size:.9rem}
+input,select,textarea{font:inherit;width:100%;padding:.75rem .9rem;border:1px solid var(--bord);border-radius:.8rem;background:rgba(255,255,255,.08);color:var(--tx);margin:.3rem 0 1rem}
+input:focus,textarea:focus{border-color:var(--c);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 35%,transparent)}
+input[type=color]{height:3rem;padding:.2rem}
+label{font-weight:700;font-size:.92rem}
+.carte{background:var(--glass);border:1px solid var(--bord);backdrop-filter:blur(10px);border-radius:1.2rem;padding:1.2rem;margin-bottom:1rem}
+.carte.ev{display:block;text-decoration:none;border-left:6px solid var(--ec);transition:transform .2s,background .2s}
+.carte.ev:hover{transform:translateY(-3px);background:rgba(255,255,255,.1)}
+.carte.pay{background:color-mix(in srgb,var(--c) 14%,transparent);border-color:color-mix(in srgb,var(--c) 45%,transparent)}
+.palier{position:relative;display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1.1rem 1.5rem;border-radius:1.1rem;background:var(--glass);border:1px solid var(--bord);margin-bottom:.8rem;overflow:hidden}
+.palier::before,.palier::after{content:"";position:absolute;top:50%;width:20px;height:20px;border-radius:50%;background:var(--bg);border:1px solid var(--bord);transform:translateY(-50%)}
+.palier::before{left:-11px}.palier::after{right:-11px}
+.palier b{font-family:'Unbounded',sans-serif;font-size:1.2rem}
+.palier.actif{background:linear-gradient(120deg,color-mix(in srgb,var(--c) 35%,transparent),var(--glass));border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 12px 40px -12px var(--c)}
+.palier.passe{opacity:.4;text-decoration:line-through}
+.badge{display:inline-block;padding:.15rem .8rem;border-radius:99px;font-size:.82rem;font-weight:700;background:#fde68a;color:#3b2a00}
+.badge.confirmed{background:#86efac;color:#052e16}.badge.rejected{background:#fca5a5;color:#450a0a}
+.ligne{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center}
+.onglets{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.2rem}
+.onglets button.on{background:var(--c);color:#14091f;border-color:transparent}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.8rem;margin-bottom:1.2rem}
+.stats div{background:var(--glass);border:1px solid var(--bord);border-radius:1.1rem;padding:.9rem 1.1rem;color:var(--mu);font-size:.9rem}
+.stats b{font-family:'Unbounded',sans-serif;font-size:1.5rem;display:block;color:var(--c)}
+.msg{padding:.8rem 1rem;border-radius:.8rem;background:rgba(248,113,113,.2);border:1px solid rgba(248,113,113,.5);margin-bottom:1rem}
+.msg.ok{background:rgba(74,222,128,.18);border-color:rgba(74,222,128,.5)}
+.qr{background:#fff;padding:.7rem;border-radius:1rem;display:inline-block;margin:.5rem 0;box-shadow:0 12px 40px -12px var(--c)}
+.petit-texte{font-size:.88rem;color:var(--mu)}
+footer{text-align:center;color:var(--mu);font-size:.88rem;padding:3rem 1rem 2rem}
+@media (prefers-reduced-motion:no-preference){.hero .wrap>*{animation:monte .7s ease-out both}.hero .wrap>*:nth-child(2){animation-delay:.08s}.hero .wrap>*:nth-child(3){animation-delay:.16s}@keyframes monte{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}}
+</style>
+</head>
+<body>
+<nav id="nav"></nav>
+<main id="app"></main>
+<footer>© IPNET Institute of Technology · IPNET Events</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script>
+/* ===== À REMPLIR (Supabase > Project Settings > API) ===== */
+const SB_URL = "https://quvrtgljyuughwjoemxv.supabase.co";
+const SB_KEY = "sb_publishable_HuR-G5c-v08hxTIjNevpZg_XHMXRarE";
+const SITE_NAME = "IPNET Events";
+/* ========================================================= */
+
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const app = document.getElementById("app");
+let me = null, profile = null, timer = null, tab = "orders";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => Number(n).toLocaleString("fr-FR").replace(/\u202f/g, " ") + " FCFA";
+const dt = s => new Date(s).toLocaleString("fr-FR", {dateStyle:"full", timeStyle:"short", timeZone:"UTC"});
+const flash = (t, ok) => `<div class="msg ${ok?"ok":""}" role="alert">${esc(t)}</div>`;
+const STATUT = {pending:"En attente de validation", confirmed:"Confirmé", rejected:"Refusé"};
+
+async function route() {
+  clearInterval(timer);
+  document.documentElement.style.setProperty("--c", "#f796cb");
+  const { data: { session } } = await sb.auth.getSession();
+  me = session?.user || null; profile = null;
+  if (me) profile = (await sb.from("profiles").select("*").eq("id", me.id).single()).data;
+  $("nav").innerHTML =
+    `<b><a href="#/" style="text-decoration:none">${esc(SITE_NAME)}</a></b><span>` +
+    (me ? `<a href="#/me">Mes billets</a>${profile?.role==="admin" ? `<a href="#/admin">Admin</a>` : ""}<a href="#" id="out">Déconnexion</a>`
+        : `<a href="#/login">Connexion</a>`) + `</span>`;
+  if ($("out")) $("out").onclick = async e => { e.preventDefault(); await sb.auth.signOut(); location.hash = "#/"; };
+  const [, a, b] = location.hash.split("/");
+  if (a === "e") return eventPage(b);
+  if (a === "login") return loginPage();
+  if (a === "me") return mePage();
+  if (a === "admin") return adminPage();
+  return home();
+}
+addEventListener("hashchange", route);
+sb.auth.onAuthStateChange(ev => { if (["INITIAL_SESSION","SIGNED_IN","SIGNED_OUT"].includes(ev)) route(); });
+
+/* ---------- Accueil ---------- */
+async function home() {
+  const { data } = await sb.from("events").select("*").eq("active", true).order("starts_at");
+  app.innerHTML = `<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les événements<br>du campus</h1><p class="sous">Réserve ta place, paie par T-Money et reçois ton billet avec QR code.</p></div></div><div class="wrap"><h2>À venir</h2>` +
+    (data?.length ? data.map(e => `<a class="carte ev" style="--ec:${esc(e.color)}" href="#/e/${esc(e.slug)}">
+      <b>${esc(e.title)}</b><br>${dt(e.starts_at)} · ${esc(e.venue || "Lieu bientôt annoncé")}</a>`).join("") : "<p>Aucun événement pour le moment.</p>") + `</div>`;
+}
+
+/* ---------- Page événement (personnalisée) ---------- */
+function palierActuel(tiers) {
+  const now = Date.now();
+  return tiers.find(p => now >= Date.parse(p.du + "T00:00:00Z") && now <= Date.parse(p.au + "T23:59:59Z"));
+}
+async function eventPage(slug) {
+  const { data: e } = await sb.from("events").select("*").eq("slug", slug).single();
+  if (!e) { app.innerHTML = `<div class="wrap"><h1>Introuvable</h1><p>Cet événement n'existe pas.</p></div>`; return; }
+  document.documentElement.style.setProperty("--c", e.color || "#f796cb");
+  document.title = e.title;
+  const tiers = e.tiers || [];
+  const ouvert = () => Date.now() >= Date.parse(e.sales_open);
+  const fini = () => Date.now() >= Date.parse(e.starts_at);
+  app.innerHTML = `<div class="hero"><div class="wrap">
+      ${e.tagline ? `<p class="pill">${esc(e.tagline)}</p>` : ""}<h1>${esc(e.title)}</h1>
+      <p class="quand">${dt(e.starts_at)}</p>
+      <div class="compte" id="cpt"></div><p id="phrase"></p></div></div>
+    <div class="wrap">
+      <dl class="infos"><div><dt>Lieu</dt><dd>${esc(e.venue || "Bientôt annoncé")}</dd></div>
+        ${e.dress_code ? `<div><dt>Dress code</dt><dd>${esc(e.dress_code)}</dd></div>` : ""}</dl>
+      <h2>Les tarifs</h2><div id="paliers"></div>
+      <h2>Acheter un billet</h2><div id="achat"></div></div>`;
+  function tick() {
+    const now = Date.now(), cible = ouvert() ? Date.parse(e.starts_at) : Date.parse(e.sales_open);
+    let d = Math.max(0, cible - now);
+    const j = Math.floor(d / 864e5); d -= j * 864e5; const h = Math.floor(d / 36e5); d -= h * 36e5;
+    const m = Math.floor(d / 6e4); d -= m * 6e4; const s = Math.floor(d / 1e3);
+    $("cpt").innerHTML = [[j,"jours"],[h,"heures"],[m,"min"],[s,"sec"]].map(x => `<div><b>${x[0]}</b>${x[1]}</div>`).join("");
+    const p = palierActuel(tiers);
+    $("phrase").textContent = fini() ? "Événement terminé." : ouvert() ? (p ? `Tarif actuel : ${fmt(p.prix)}. Le prix monte au palier suivant.` : "Billetterie fermée.") : "Ouverture de la billetterie dans :";
+    $("paliers").innerHTML = tiers.map((t, i) =>
+      `<div class="palier ${t === p ? "actif" : Date.now() > Date.parse(t.au + "T23:59:59Z") ? "passe" : ""}"><span>${i ? "Ensuite" : "Ouverture"} · ${esc(t.du)} → ${esc(t.au)}</span><b>${fmt(t.prix)}</b></div>`).join("");
+  }
+  tick(); timer = setInterval(tick, 1000);
+
+  const zone = $("achat"), p0 = palierActuel(tiers);
+  if (fini() || !ouvert() || !p0) { zone.innerHTML = `<p>${fini() ? "Les ventes sont terminées." : "La vente n'est pas ouverte en ce moment."}</p>`; return; }
+  if (!me) { zone.innerHTML = `<p style="margin-bottom:1rem">Connectez-vous pour acheter votre billet.</p><a class="btn plein" href="#/login">Se connecter</a>`; return; }
+  zone.innerHTML = `<form id="f" class="carte">
+    <label>Nombre de billets<input type="number" id="qty" min="1" max="10" value="1" required></label>
+    <p>Total à payer : <b id="tot">${fmt(p0.prix)}</b></p><br>
+    <div class="carte pay"><b>Comment payer :</b><br>Envoyez le montant par <b>T-Money</b> au <b>${esc(e.pay_number)}</b>,
+    puis ajoutez ci-dessous la capture d'écran du paiement. Votre billet sera disponible après vérification.</div>
+    <label>Référence de transaction T-Money (facultatif)<input id="ref"></label>
+    <label>Capture d'écran du paiement<input type="file" id="img" accept="image/*" required></label>
+    <button class="plein" id="go">Envoyer ma commande</button><div id="err" style="margin-top:1rem"></div></form>`;
+  $("qty").oninput = () => $("tot").textContent = fmt(p0.prix * (+$("qty").value || 1));
+  $("f").onsubmit = async ev => {
+    ev.preventDefault(); const go = $("go"); go.disabled = true; go.textContent = "Envoi…";
+    const file = $("img").files[0], fail = m => { $("err").innerHTML = flash(m); go.disabled = false; go.textContent = "Envoyer ma commande"; };
+    const path = `${me.id}/${crypto.randomUUID()}.${(file.name.split(".").pop() || "jpg").toLowerCase()}`;
+    const up = await sb.storage.from("proofs").upload(path, file);
+    if (up.error) return fail("Échec de l'envoi de la capture : " + up.error.message);
+    const { error } = await sb.from("orders").insert({ event_id: e.id, user_id: me.id, qty: +$("qty").value, total: p0.prix * +$("qty").value, reference: $("ref").value || null, proof_path: path });
+    if (error) return fail(error.message);
+    location.hash = "#/me";
+  };
+}
+
+/* ---------- Connexion / inscription ---------- */
+function loginPage() {
+  let inscription = false;
+  const draw = (m = "") => {
+    app.innerHTML = `<div class="wrap" style="max-width:480px"><h1 style="font-size:2rem">${inscription ? "Créer un compte" : "Connexion"}</h1><br>${m}
+      <form id="f">${inscription ? `<label>Nom complet<input id="nom" required></label><label>Téléphone<input id="tel" type="tel" required></label>` : ""}
+      <label>Email<input id="mail" type="email" required></label><label>Mot de passe<input id="pw" type="password" minlength="6" required></label>
+      <button class="plein">${inscription ? "Créer mon compte" : "Me connecter"}</button></form><br>
+      <a href="#" id="sw">${inscription ? "J'ai déjà un compte" : "Pas de compte ? S'inscrire"}</a></div>`;
+    $("sw").onclick = ev => { ev.preventDefault(); inscription = !inscription; draw(); };
+    $("f").onsubmit = async ev => {
+      ev.preventDefault(); const email = $("mail").value, password = $("pw").value;
+      if (inscription) {
+        const { error } = await sb.auth.signUp({ email, password, options: { data: { full_name: $("nom").value, phone: $("tel").value } } });
+        return error ? draw(flash(error.message)) : draw(flash("Compte créé. Si demandé, confirmez votre email puis connectez-vous.", true));
+      }
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) draw(flash("Email ou mot de passe incorrect.")); else location.hash = "#/me";
+    };
+  };
+  draw();
+}
+
+/* ---------- Dashboard utilisateur ---------- */
+async function mePage() {
+  if (!me) { location.hash = "#/login"; return; }
+  const { data } = await sb.from("orders").select("*, events(title,starts_at,venue)").eq("user_id", me.id).order("created_at", { ascending: false });
+  app.innerHTML = `<div class="wrap"><h1 style="font-size:2rem">Bonjour ${esc(profile?.full_name || "")}</h1><h2>Mes commandes</h2>` +
+    (data?.length ? data.map(o => `<div class="carte"><div class="ligne"><b>${esc(o.events.title)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
+      <p>${o.qty} billet(s) · ${fmt(o.total)} · ${dt(o.events.starts_at)}</p>
+      ${o.status === "confirmed" ? `<p>Code : <b>${esc(o.code)}</b>${o.used ? " (déjà utilisé)" : ""}</p><div class="qr"><img alt="QR code du billet" width="200" height="200" data-qr="${esc(o.code)}"></div><p class="petit-texte">Présentez ce QR code à l'entrée (un scan valide tous les billets de la commande).</p>` : ""}
+      ${o.status === "rejected" ? `<p>Paiement non reconnu. Vérifiez le montant et recommencez avec une capture claire.</p>` : ""}</div>`).join("") : `<p>Vous n'avez pas encore de commande. <a href="#/">Voir les événements</a></p>`) + `</div>`;
+  document.querySelectorAll("[data-qr]").forEach(async i => i.src = await QRCode.toDataURL(i.dataset.qr, { width: 200, margin: 1 }));
+}
+
+/* ---------- Dashboard admin ---------- */
+async function adminPage() {
+  if (profile?.role !== "admin") { app.innerHTML = `<div class="wrap"><h1>Accès refusé</h1><p>Cette page est réservée aux administrateurs.</p></div>`; return; }
+  const onglets = [["orders","Commandes"],["events","Événements"],["scan","Contrôle d'entrée"]];
+  app.innerHTML = `<div class="wrap"><h1 style="font-size:2rem">Administration</h1><br><div class="onglets">` +
+    onglets.map(o => `<button class="${tab === o[0] ? "on" : ""}" data-t="${o[0]}">${o[1]}</button>`).join("") + `</div><div id="panel"></div></div>`;
+  document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { tab = b.dataset.t; adminPage(); });
+  ({ orders: adminOrders, events: adminEvents, scan: adminScan })[tab]($("panel"));
+}
+
+async function adminOrders(box) {
+  const { data } = await sb.from("orders").select("*, events(title), profiles(full_name,phone)").order("created_at", { ascending: false });
+  const ok = data.filter(o => o.status === "confirmed");
+  box.innerHTML = `<div class="stats"><div><b>${data.filter(o => o.status === "pending").length}</b>à valider</div>
+    <div><b>${ok.reduce((n, o) => n + o.qty, 0)}</b>billets confirmés</div><div><b>${fmt(ok.reduce((n, o) => n + o.total, 0))}</b>encaissé</div></div>` +
+    data.map(o => `<div class="carte"><div class="ligne"><b>${esc(o.profiles?.full_name)} · ${esc(o.profiles?.phone)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
+      <p>${esc(o.events.title)} · ${o.qty} billet(s) · <b>${fmt(o.total)}</b>${o.reference ? " · réf. " + esc(o.reference) : ""}</p>
+      <div class="ligne" style="justify-content:flex-start"><button class="petit" data-proof="${esc(o.proof_path)}">Voir la capture</button>
+      ${o.status === "pending" ? `<button class="petit plein" data-ok="${o.id}">Confirmer</button><button class="petit" data-no="${o.id}">Refuser</button>` : ""}</div></div>`).join("");
+  box.querySelectorAll("[data-proof]").forEach(b => b.onclick = async () => {
+    const { data: u } = await sb.storage.from("proofs").createSignedUrl(b.dataset.proof, 600); window.open(u.signedUrl, "_blank");
+  });
+  box.querySelectorAll("[data-ok]").forEach(b => b.onclick = async () => {
+    const code = crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase();
+    await sb.from("orders").update({ status: "confirmed", code }).eq("id", b.dataset.ok); adminPage();
+  });
+  box.querySelectorAll("[data-no]").forEach(b => b.onclick = async () => { await sb.from("orders").update({ status: "rejected" }).eq("id", b.dataset.no); adminPage(); });
+}
+
+async function adminEvents(box) {
+  const { data } = await sb.from("events").select("*").order("starts_at", { ascending: false });
+  box.innerHTML = `<form id="f" class="carte"><b>Nouvel événement</b><br><br>
+    <label>Titre<input id="t" required></label><label>Slogan<input id="s"></label>
+    <label>Adresse du lien (ex : pink-white)<input id="slug" pattern="[a-z0-9-]+" required></label>
+    <label>Date et heure de l'événement<input id="d" type="datetime-local" required></label>
+    <label>Ouverture de la billetterie<input id="o" type="datetime-local" required></label>
+    <label>Lieu<input id="v"></label><label>Dress code<input id="dc"></label>
+    <label>Couleur principale<input id="col" type="color" value="#f796cb"></label>
+    <label>Numéro T-Money pour le paiement<input id="pay" required></label>
+    <label>Paliers de prix (une ligne par palier : prix;début;fin)<textarea id="tiers" rows="3" placeholder="5000;2026-11-17;2026-12-05&#10;7000;2026-12-06;2026-12-16"></textarea></label>
+    <p class="petit-texte">Heures saisies en heure de Lomé (UTC).</p><br><button class="plein">Créer l'événement</button><div id="err"></div></form>
+    <h2>Événements existants</h2>` + data.map(e => `<div class="carte"><b>${esc(e.title)}</b> · ${dt(e.starts_at)}<br><span class="petit-texte">Lien : #/e/${esc(e.slug)}</span></div>`).join("");
+  $("f").onsubmit = async ev => {
+    ev.preventDefault();
+    const tiers = $("tiers").value.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const [prix, du, au] = l.split(";"); return { prix: +prix, du: du.trim(), au: au.trim() }; });
+    const { error } = await sb.from("events").insert({ title: $("t").value, tagline: $("s").value, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z",
+      venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, tiers });
+    error ? $("err").innerHTML = flash(error.message) : adminPage();
+  };
+}
+
+function adminScan(box) {
+  box.innerHTML = `<form id="f" class="carte"><label>Code du billet (lu depuis le QR)<input id="code" autocomplete="off" required></label><button class="plein">Vérifier</button></form><div id="res"></div>`;
+  $("f").onsubmit = async ev => {
+    ev.preventDefault(); const res = $("res");
+    const { data: o } = await sb.from("orders").select("*, events(title), profiles(full_name)").eq("code", $("code").value.trim().toUpperCase()).maybeSingle();
+    if (!o) { res.innerHTML = flash("Code invalide."); return; }
+    res.innerHTML = `<div class="carte"><b>${esc(o.profiles.full_name)}</b> · ${esc(o.events.title)} · ${o.qty} billet(s)<br><br>` +
+      (o.used ? flash("Déjà utilisé : refuser l'entrée.") : `${flash("Billet valide.", true)}<button class="plein" id="use">Marquer comme utilisé</button>`) + `</div>`;
+    if ($("use")) $("use").onclick = async () => { await sb.from("orders").update({ used: true }).eq("id", o.id); res.innerHTML = flash("Entrée validée.", true); };
+  };
+}
+</script>
+</body>
+</html>
