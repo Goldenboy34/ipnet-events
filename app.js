@@ -293,9 +293,15 @@ async function eventPage(slug, others) {
       $("paliers").innerHTML = tiers.map((t, i) => `<div class="palier ${t === p ? "actif" : Date.now() > Date.parse(t.au + "T23:59:59Z") ? "passe" : ""}"><span>${i ? "Ensuite" : "Ouverture"} · ${esc(t.du)} → ${esc(t.au)}</span><b>${fmt(t.prix)}</b></div>`).join("");
     }
   }
+  const key = () => [fini(), ouvert(), palierActuel(tiers)?.du].join("|");
+  let lastKey;
+  const tick0 = tick;
+  tick = function () { tick0(); if (lastKey !== undefined && key() !== lastKey) { lastKey = key(); renderAchat(); } };
   tick(); timer = setInterval(tick, 1000);
 
-  const zone = $("achat"), p0 = palierActuel(tiers);
+  const zone = $("achat");
+  function renderAchat() {
+  const p0 = palierActuel(tiers);
   if (fini() || !ouvert() || !p0) { zone.innerHTML = `<p>${fini() ? "Les ventes sont terminées." : "La vente n'est pas ouverte en ce moment."}</p>`; return; }
   if (left != null && left <= 0) { zone.innerHTML = `<p>Complet : il n'y a plus de places.</p>`; return; }
   const el = eligible(e, profile);
@@ -346,6 +352,8 @@ async function eventPage(slug, others) {
     notice = "Commande envoyée ! Elle passera en « Confirmé » dès que l'administrateur aura vérifié ton paiement.";
     confetti(); location.hash = "#/me";
   };
+  }
+  renderAchat(); lastKey = key();
 }
 
 /* ---------- Connexion / inscription / mot de passe oublié ---------- */
