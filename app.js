@@ -155,6 +155,7 @@ async function route() {
   $("nav").innerHTML = `<b><a href="#/" class="marque">${logo()}<span>${esc(SITE_NAME)}</span></a></b><span>` +
     (me ? `<a href="#/me">Mes billets</a>${profile?.role === "admin" ? `<a href="#/admin">Admin</a>` : ""}<a href="#" id="out">Déconnexion</a>`
         : `<a href="#/login">Connexion</a>`) + `</span>`;
+  document.querySelectorAll('#nav a[href^="#/"]').forEach(l => l.addEventListener("click", () => { if (l.getAttribute("href") === location.hash) route(); }));
   if ($("out")) $("out").onclick = async e => { e.preventDefault(); await sb.auth.signOut(); location.hash = "#/"; };
 
   const [, a, b] = location.hash.split("/");
@@ -231,8 +232,8 @@ async function home() {
   const { data } = await sb.from("events").select("*").eq("active", true).order("starts_at");
   const en = (data || []).filter(e => Date.parse(e.starts_at) + 12 * 36e5 > Date.now());
   if (en.length) return eventPage(en[0].slug, en.slice(1));
-  show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les Gbingbances<br>du campus</h1>
-    <p class="sous">Réserve ta place, Pour ne rien manquer.</p></div></div>
+  show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les événements<br>du campus</h1>
+    <p class="sous">Réserve ta place, paie par Mixx by Yas et reçois ton billet avec QR code.</p></div></div>
     <div class="wrap"><h2>À venir</h2>` +
     (data?.length ? data.map(e => `<a class="carte ev rv" style="--ec:${esc(e.color)}" href="#/e/${esc(e.slug)}"><b>${esc(e.title)}</b>
       <span class="badge none" style="margin-left:.5rem">${e.audience === "all" ? "Ouvert à tous" : "Étudiants"}</span><br>${dt(e.starts_at)} · ${esc(e.venue || "Lieu bientôt annoncé")}</a>`).join("")
@@ -260,7 +261,7 @@ async function eventPage(slug, others) {
   document.title = e.title;
   const { data: left } = await sb.rpc("places_restantes", { p_event: e.id });
   const tiers = e.tiers || [];
-  const ouvert = () => Date.now() >= Date.parse(e.sales_open), fini = () => Date.now() >= Date.parse(e.starts_at);
+  const ouvert = () => Date.now() >= Date.parse(e.sales_open), fini = () => Date.now() >= Date.parse(e.sales_close || e.starts_at);
   const parts = [["j", "jours"], ["h", "heures"], ["m", "min"], ["s", "sec"]];
 
   show(`<div class="hero"><div class="wrap">${e.tagline ? `<p class="pill">${esc(e.tagline)}</p>` : ""}
@@ -278,7 +279,7 @@ async function eventPage(slug, others) {
   const prev = {}; let lastP;
   function tick() {
     if (!$("cp-j")) return;
-    const now = Date.now(), cible = ouvert() ? Date.parse(e.starts_at) : Date.parse(e.sales_open);
+    const now = Date.now(), cible = ouvert() ? Date.parse(e.sales_close || e.starts_at) : Date.parse(e.sales_open);
     let d = Math.max(0, cible - now);
     const v = { j: Math.floor(d / 864e5) }; d -= v.j * 864e5;
     v.h = Math.floor(d / 36e5); d -= v.h * 36e5; v.m = Math.floor(d / 6e4); d -= v.m * 6e4; v.s = Math.floor(d / 1e3);
@@ -287,7 +288,7 @@ async function eventPage(slug, others) {
       if (prev[k] !== t) { el.textContent = t; prev[k] = t; if (!REDUCE) { el.classList.remove("flip"); void el.offsetWidth; el.classList.add("flip"); } }
     });
     const p = palierActuel(tiers);
-    $("phrase").textContent = fini() ? "Événement terminé." : ouvert() ? (p ? `Tarif actuel : ${fmt(p.prix)}. Le prix monte au palier suivant.` : "Billetterie fermée.") : "Ouverture de la billetterie dans :";
+    $("phrase").textContent = fini() ? "La billetterie est fermée." : ouvert() ? (p ? `Billetterie ouverte · Tarif actuel : ${fmt(p.prix)}. Fin de la billetterie dans :` : "Billetterie ouverte, mais aucun tarif n'est actif aujourd'hui. Fin de la billetterie dans :") : "Ouverture de la billetterie dans :";
     if (p !== lastP || lastP === undefined) {
       lastP = p;
       $("paliers").innerHTML = tiers.map((t, i) => `<div class="palier ${t === p ? "actif" : Date.now() > Date.parse(t.au + "T23:59:59Z") ? "passe" : ""}"><span>${i ? "Ensuite" : "Ouverture"} · ${esc(t.du)} → ${esc(t.au)}</span><b>${fmt(t.prix)}</b></div>`).join("");
@@ -302,7 +303,7 @@ async function eventPage(slug, others) {
   const zone = $("achat");
   function renderAchat() {
   const p0 = palierActuel(tiers);
-  if (fini() || !ouvert() || !p0) { zone.innerHTML = `<p>${fini() ? "Les ventes sont terminées." : "La vente n'est pas ouverte en ce moment."}</p>`; return; }
+  if (fini() || !ouvert() || !p0) { zone.innerHTML = `<p>${fini() ? "La billetterie est fermée : les ventes sont terminées." : "La vente n'est pas ouverte en ce moment."}</p>`.replace("La vente n'est pas ouverte en ce moment.", ouvert() && !p0 ? "Aucun tarif n'est actif aujourd'hui : l'organisateur doit vérifier les dates des paliers." : "La vente n'est pas ouverte en ce moment."); return; }
   if (left != null && left <= 0) { zone.innerHTML = `<p>Complet : il n'y a plus de places.</p>`; return; }
   const el = eligible(e, profile);
   if (!el.ok) {
@@ -319,7 +320,7 @@ async function eventPage(slug, others) {
   zone.innerHTML = `<form id="f" class="formcard">
     <div class="etape"><span class="num">1</span><div><h3>Combien de billets ?</h3>
       <div class="stepper"><button type="button" id="mn" aria-label="Moins">−</button><input type="number" id="qty" min="1" max="10" value="1" required aria-label="Nombre de billets"><button type="button" id="pl" aria-label="Plus">+</button></div>
-      <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte"></p></div></div>
+      <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte">Le prix final est fixé par le serveur.</p></div></div>
     <div class="etape"><span class="num">2</span><div><h3>Paie par Mixx by Yas</h3>
       <img class="mixx" src="mixx.png" alt="Mixx by Yas" width="150" height="116">
       <div class="paybox"><div><span class="petit-texte">Numéro à payer</span><br><b class="gros">${esc(e.pay_number)}</b></div><button type="button" class="petit" id="cp">Copier</button></div>
@@ -512,7 +513,7 @@ async function downloadTicket(d, holder) {
     fit(d.ev, 54, W - 80); x.fillText(d.ev, W / 2, 130);
     x.font = "500 28px 'DM Sans', sans-serif"; x.fillStyle = "#cdc7f0";
     x.fillText(dt(d.when), W / 2, 190); if (d.venue) x.fillText(d.venue, W / 2, 232);
-    const qr = new Image(); qr.src = await QRCode.toDataURL(ticketUrl(d.dl), { width: 520, margin: 1 }); await qr.decode();
+    const qr = new Image(); qr.src = await QRCode.toDataURL(ticketUrl(d.dl), { width: 520, margin: 2, errorCorrectionLevel: "L" }); await qr.decode();
     x.fillStyle = "#ffffff"; x.beginPath(); if (x.roundRect) x.roundRect(80, 290, 560, 560, 28); else x.rect(80, 290, 560, 560); x.fill(); x.drawImage(qr, 100, 310, 520, 520);
     x.fillStyle = "#ffffff"; x.font = "700 36px 'DM Sans', sans-serif"; x.fillText(holder, W / 2, 915);
     x.font = "700 30px monospace"; x.fillStyle = col; x.fillText(d.dl, W / 2, 965);
@@ -525,22 +526,22 @@ async function downloadTicket(d, holder) {
 /* ---------- Dashboard utilisateur ---------- */
 async function mePage() {
   if (!me) { location.hash = "#/login"; return; }
-  const { data } = await sb.from("orders").select("*, events(title,starts_at,venue), tickets(id,code,status)").eq("user_id", me.id).order("created_at", { ascending: false });
+  const { data, error: errO } = await sb.from("orders").select("*, events(title,starts_at,venue), tickets(id,code,status,used_at)").eq("user_id", me.id).order("created_at", { ascending: false });
   const p = profile || {};
   const n = notice; notice = "";
   show(`<div class="wrap"><h1 class="mini">Bonjour ${esc(p.first_name || "")}</h1><br>${n ? flash(n, true) : ""}
     <div class="carte"><div class="ligne"><span><b>${esc(p.full_name || "")}</b> · ${esc(TYPES[p.account_type] || "")}</span></div>
       ${p.blocked ? flash("Ton compte est bloqué. Contacte un administrateur.") : ""}
       <div class="ligne g" style="margin-top:.8rem"><button class="petit" id="all">Me déconnecter partout</button></div></div>
-    <h2>Mes commandes</h2>` +
+    <h2>Mes commandes et mes billets</h2>${errO ? flash("Impossible de charger tes commandes : " + (errO.message || "erreur")) : ""}` +
     (data?.length ? data.map(o => `<div class="carte rv"><div class="ligne"><b>${esc(o.events.title)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
-      <p>${o.qty} billet(s) · ${fmt(o.total)} · ${dt(o.events.starts_at)}<br><span class="petit-texte">Code de commande ${esc(o.order_code)}</span></p>
-      ${o.status === "confirmed" ? `<div class="billets">${(o.tickets || []).map(t => `<div class="billet ${t.status}"><div class="qr"><img alt="QR code du billet" width="180" height="180" data-qr="${esc(ticketUrl(t.code))}"></div>
-        <div><b>${esc(t.code)}</b></div><span class="badge ${t.status}">${BILLET[t.status]}</span>${t.status === "valid" ? `<br><button class="petit" style="margin-top:.5rem" data-dl="${esc(t.code)}" data-ev="${esc(o.events.title)}" data-when="${esc(o.events.starts_at)}" data-venue="${esc(o.events.venue || "")}">Télécharger</button>` : ""}</div>`).join("")}</div>
+      <p>${o.qty} billet(s) · ${fmt(o.total)} · ${dt(o.events.starts_at)}<br><span class="petit-texte">Commandé le ${dts(o.created_at)} · Code de commande ${esc(o.order_code)} · Référence ${esc(o.reference || "—")}</span></p>
+      ${o.status === "confirmed" ? `<div class="billets">${(o.tickets || []).map(t => `<div class="billet ${t.status}">${t.status === "valid" ? `<div class="qr"><img alt="QR code du billet" width="180" height="180" data-qr="${esc(ticketUrl(t.code))}"></div>` : ""}
+        <div><b>${esc(t.code)}</b></div><span class="badge ${t.status}">${BILLET[t.status]}</span>${t.status === "used" && t.used_at ? `<br><span class="petit-texte">Entrée le ${dts(t.used_at)}</span>` : ""}${t.status === "valid" ? `<br><button class="petit" style="margin-top:.5rem" data-dl="${esc(t.code)}" data-ev="${esc(o.events.title)}" data-when="${esc(o.events.starts_at)}" data-venue="${esc(o.events.venue || "")}">Télécharger</button>` : ""}</div>`).join("")}</div>
         <p class="petit-texte" style="margin-top:.6rem">Un QR code par billet : il s'ouvre avec l'appareil photo du contrôleur et n'est valable qu'une seule fois.</p>` : ""}
       ${o.status === "rejected" ? `<p>Paiement non reconnu. Vérifie le montant et recommence avec une capture claire.</p>` : ""}</div>`).join("")
       : `<p>Tu n'as pas encore de commande. <a href="#/">Voir les événements</a></p>`) + `</div>`);
-  document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 180, margin: 1 }); } catch (e) { i.replaceWith(document.createTextNode("QR indisponible : donne le code ci-dessous à l'entrée.")); } });
+  document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch (e) { i.replaceWith(document.createTextNode("QR indisponible : donne le code ci-dessous à l'entrée.")); } });
   document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => downloadTicket(btn.dataset, p.full_name || ""));
   $("all").onclick = async () => { await sb.auth.signOut({ scope: "global" }); location.hash = "#/login"; };
 }
@@ -556,7 +557,7 @@ function startIdle() {
   idleReset();
 }
 function stopIdle() { clearTimeout(idle); if (idleReset) { ["pointerdown", "keydown", "scroll"].forEach(ev => removeEventListener(ev, idleReset)); idleReset = null; } }
-function stopCam() { clearInterval(camTimer); camTimer = null; if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; } }
+function stopCam() { clearInterval(camTimer); clearTimeout(camTimer); camTimer = null; if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; } }
 const csvCell = v => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
 function download(name, rows) {
   const blob = new Blob(["\ufeff" + rows.map(r => r.map(csvCell).join(";")).join("\n")], { type: "text/csv;charset=utf-8" });
@@ -615,7 +616,8 @@ async function adminEvents(box, editId) {
     <div class="grille"><label>Titre<input id="t" required maxlength="120" value="${val("title")}" placeholder="Soirée Amapiano"></label><label>Slogan (facultatif)<input id="s" maxlength="200" value="${val("tagline")}" placeholder="La nuit de l'amapiano"></label></div>
     <label>Adresse du lien (minuscules et tirets)<input id="slug" pattern="[a-z0-9\\-]{2,60}" required value="${val("slug")}" placeholder="soiree-amapiano"></label>
     <div class="section">Quand et où</div>
-    <div class="grille"><label>Date et heure de l'événement<input id="d" type="datetime-local" required value="${loc(ed?.starts_at)}"></label><label>Ouverture de la billetterie<input id="o" type="datetime-local" required value="${loc(ed?.sales_open)}"></label></div>
+    <div class="grille"><label>Date et heure de l'événement<input id="d" type="datetime-local" required value="${loc(ed?.starts_at)}"></label></div>
+    <div class="grille"><label>Ouverture de la billetterie (date et heure)<input id="o" type="datetime-local" required value="${loc(ed?.sales_open)}"></label><label>Fin de la billetterie (date et heure)<input id="sc" type="datetime-local" required value="${loc(ed?.sales_close || ed?.starts_at)}"></label></div>
     <div class="grille"><label>Lieu<input id="v" value="${val("venue")}" placeholder="IPNET Assiyeye"></label><label>Dress code<input id="dc" value="${val("dress_code")}" placeholder="All white"></label></div>
     <p class="petit-texte" style="margin-top:-.5rem">Heures saisies en heure de Lomé (UTC).</p>
     <div class="section">La vente</div>
@@ -666,7 +668,7 @@ async function adminEvents(box, editId) {
     const btn = $("sv"); btn.disabled = true;
     const fail = m => { $("err").innerHTML = flash(m); btn.disabled = false; };
     const tiers = $("tiers").value.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const [prix, du, au] = l.split(";"); return { prix: +prix, du: (du || "").trim(), au: (au || "").trim() }; });
-    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, audience: $("aud").value, capacity: +$("cap").value, tiers };
+    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", sales_close: $("sc").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, audience: $("aud").value, capacity: +$("cap").value, tiers };
     const files = [...$("bg").files];
     if (medias.length + files.length > 8) return fail("8 fonds maximum : retire-en quelques-uns avant d'en ajouter.");
     const kinds = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm" };
@@ -692,7 +694,7 @@ async function adminEvents(box, editId) {
       let why = "vérifie les champs (lien unique, paliers au format prix;début;fin, billetterie avant l'événement).";
       if (/row-level security|permission denied/i.test(m)) why = "ton compte n'a pas le droit (il faut être administrateur avec la double authentification, puis te reconnecter).";
       else if (/duplicate key|events_slug_key/i.test(m)) why = "ce lien existe déjà, change l'adresse du lien.";
-      else if (/events_check|sales_open/i.test(m)) why = "la billetterie doit s'ouvrir AVANT la date de l'événement.";
+      else if (/events_check|sales_open|sales_close/i.test(m)) why = "la fin de la billetterie doit être APRÈS son ouverture, et l'ouverture doit être avant l'événement.";
       else if (/valid_tiers|tiers/i.test(m)) why = "paliers invalides. Format exact : 2000;2026-11-10;2026-11-20 (une ligne par palier, prix > 0).";
       else if (/slug/i.test(m)) why = "lien invalide : minuscules, chiffres et tirets seulement (ex : soiree-amapiano).";
       else if (/bg_media|bg_/i.test(m)) why = "la base n'est pas à jour : lance d'abord le fichier migration_v3.sql dans Supabase.";
@@ -794,31 +796,39 @@ function adminScan(box) {
     if (typeof jsQR === "undefined") return $("camz").innerHTML = flash("Le fichier jsQR.js est absent du site. Ajoute-le sur GitHub (au même niveau que index.html), puis recharge la page.");
     try {
       stopCam();
-      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } }, audio: false });
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, audio: false });
       $("camz").innerHTML = `<div class="viseur"><video class="cam" id="vid" playsinline muted autoplay></video><i></i></div><p class="petit-texte" id="etat">Recherche d'un QR code…</p>`;
       $("cam").hidden = true; $("camoff").hidden = false;
       const v = $("vid"); v.srcObject = camStream; await v.play();
       const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true });
       let det = null;
       try { if ("BarcodeDetector" in window && (await BarcodeDetector.getSupportedFormats()).includes("qr_code")) det = new BarcodeDetector({ formats: ["qr_code"] }); } catch { det = null; }
+      let n = 0;
       const lire = async () => {
-        if (det) { try { const c = await det.detect(v); if (c[0]?.rawValue) return c[0].rawValue; } catch { det = null; } }
-        const k = Math.min(1, 960 / v.videoWidth); cv.width = v.videoWidth * k | 0; cv.height = v.videoHeight * k | 0;
+        if (det) { try { const c = await det.detect(v); if (c[0]?.rawValue) return c[0].rawValue; return ""; } catch { det = null; } }
+        const k = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight)); cv.width = v.videoWidth * k | 0; cv.height = v.videoHeight * k | 0;
         cx.drawImage(v, 0, 0, cv.width, cv.height);
         const img = cx.getImageData(0, 0, cv.width, cv.height);
-        return jsQR(img.data, img.width, img.height, { inversionAttempts: "attemptBoth" })?.data || "";
+        n++;
+        return jsQR(img.data, img.width, img.height, { inversionAttempts: n % 5 === 0 ? "attemptBoth" : "dontInvert" })?.data || "";
       };
-      camTimer = setInterval(async () => {
-        if (!v.videoWidth || busy) return;
-        let raw = "";
-        try { raw = await lire(); } catch (e) { if ($("etat")) $("etat").textContent = "Erreur de lecture : " + e.message; return; }
-        const code = codeOf(raw);
-        if (!code) return;
-        if (code === last && Date.now() - lastT < 6000) return; // même billet encore devant la caméra
-        last = code; lastT = Date.now();
-        if ($("etat")) $("etat").textContent = "QR lu : " + raw.slice(0, 60);
-        scan(code);
-      }, 150);
+      const me0 = camStream;
+      const boucle = async () => {
+        if (camStream !== me0) return;
+        if (v.videoWidth && !busy) {
+          let raw = "";
+          try { raw = await lire(); } catch (e) { if ($("etat")) $("etat").textContent = "Erreur de lecture : " + e.message; }
+          const code = codeOf(raw);
+          if (code && !(code === last && Date.now() - lastT < 5000)) {
+            last = code; lastT = Date.now();
+            if (navigator.vibrate) navigator.vibrate(60);
+            if ($("etat")) $("etat").textContent = "QR lu, vérification…";
+            scan(code);
+          }
+        }
+        if (camStream === me0) camTimer = setTimeout(boucle, 25);
+      };
+      boucle();
     } catch (e) { $("camz").innerHTML = flash("Impossible d'accéder à la caméra (" + (e.name || "erreur") + "). Autorise-la dans le navigateur, ou saisis le code à la main."); }
   };
 }
