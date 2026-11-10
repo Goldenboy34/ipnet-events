@@ -231,8 +231,8 @@ async function home() {
   const { data } = await sb.from("events").select("*").eq("active", true).order("starts_at");
   const en = (data || []).filter(e => Date.parse(e.starts_at) + 12 * 36e5 > Date.now());
   if (en.length) return eventPage(en[0].slug, en.slice(1));
-  show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les événements<br>du campus</h1>
-    <p class="sous">Réserve ta place, paie par Mixx by Yas et reçois ton billet avec QR code.</p></div></div>
+  show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les Gbingbances<br>du campus</h1>
+    <p class="sous">Réserve ta place, Pour ne rien manquer.</p></div></div>
     <div class="wrap"><h2>À venir</h2>` +
     (data?.length ? data.map(e => `<a class="carte ev rv" style="--ec:${esc(e.color)}" href="#/e/${esc(e.slug)}"><b>${esc(e.title)}</b>
       <span class="badge none" style="margin-left:.5rem">${e.audience === "all" ? "Ouvert à tous" : "Étudiants"}</span><br>${dt(e.starts_at)} · ${esc(e.venue || "Lieu bientôt annoncé")}</a>`).join("")
@@ -319,7 +319,7 @@ async function eventPage(slug, others) {
   zone.innerHTML = `<form id="f" class="formcard">
     <div class="etape"><span class="num">1</span><div><h3>Combien de billets ?</h3>
       <div class="stepper"><button type="button" id="mn" aria-label="Moins">−</button><input type="number" id="qty" min="1" max="10" value="1" required aria-label="Nombre de billets"><button type="button" id="pl" aria-label="Plus">+</button></div>
-      <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte">Le prix final est fixé par le serveur.</p></div></div>
+      <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte"></p></div></div>
     <div class="etape"><span class="num">2</span><div><h3>Paie par Mixx by Yas</h3>
       <img class="mixx" src="mixx.png" alt="Mixx by Yas" width="150" height="116">
       <div class="paybox"><div><span class="petit-texte">Numéro à payer</span><br><b class="gros">${esc(e.pay_number)}</b></div><button type="button" class="petit" id="cp">Copier</button></div>
