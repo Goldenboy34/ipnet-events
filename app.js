@@ -67,9 +67,9 @@ let idle = null, idleReset = null, lastUid = null, rid = 0, notice = "", camStre
 /* ---------- Logo vivant (billet étincelle) ---------- */
 let lgN = 0;
 const logo = () => { const i = ++lgN; return `<svg class="lg" viewBox="0 0 512 512" role="img" aria-label="IPNET Events" xmlns="http://www.w3.org/2000/svg">
-<defs><linearGradient id="lgg${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4e6cf"/><stop offset=".5" style="stop-color:var(--c,#d9b98c)"/><stop offset="1" stop-color="#7fa79e"/></linearGradient>
+<defs><linearGradient id="lgg${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc4e1"/><stop offset=".5" style="stop-color:var(--c,#ff6fae)"/><stop offset="1" stop-color="#8b6bff"/></linearGradient>
 <clipPath id="lgc${i}"><path d="M96 130H416a32 32 0 0 1 32 32V226a30 30 0 0 0 0 60V350a32 32 0 0 1-32 32H96a32 32 0 0 1-32-32V286a30 30 0 0 0 0-60V162a32 32 0 0 1 32-32Z"/></clipPath><filter id="lgf${i}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="26"/></filter></defs>
-<ellipse class="lg-glow" cx="256" cy="256" rx="200" ry="140" style="fill:var(--c,#d9b98c)" filter="url(#lgf${i})"/>
+<ellipse class="lg-glow" cx="256" cy="256" rx="200" ry="140" style="fill:var(--c,#ff6fae)" filter="url(#lgf${i})"/>
 <g class="lg-tilt"><path fill="url(#lgg${i})" d="M96 130H416a32 32 0 0 1 32 32V226a30 30 0 0 0 0 60V350a32 32 0 0 1-32 32H96a32 32 0 0 1-32-32V286a30 30 0 0 0 0-60V162a32 32 0 0 1 32-32Z"/>
 <g clip-path="url(#lgc${i})"><rect class="lg-shine" x="30" y="110" width="70" height="290" fill="#fff" opacity=".38"/></g>
 <path class="lg-perf" d="M366 156V356" fill="none" stroke="#14091f" stroke-opacity=".35" stroke-width="6" stroke-linecap="round"/>
@@ -91,8 +91,8 @@ function confetti() {
   if (REDUCE) return;
   const c = document.createElement("canvas"); c.className = "confetti"; document.body.appendChild(c);
   const x = c.getContext("2d"), W = c.width = innerWidth, H = c.height = innerHeight;
-  const main = getComputedStyle(document.documentElement).getPropertyValue("--c").trim() || "#d9b98c";
-  const cols = [main, "#ffffff", "#f4e6cf", "#a9cfc4", "#d9c9ee"];
+  const main = getComputedStyle(document.documentElement).getPropertyValue("--c").trim() || "#ff6fae";
+  const cols = [main, "#ffffff", "#ffd166", "#22d3ee", "#a78bfa"];
   const ps = Array.from({ length: 140 }, () => ({ x: Math.random() * W, y: -20 - Math.random() * H * .5, vx: (Math.random() - .5) * 4, vy: 2 + Math.random() * 4, s: 5 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - .5) * .3, c: cols[Math.random() * cols.length | 0] }));
   let t = 0;
   (function f() {
@@ -134,7 +134,7 @@ let afterLogin = "", resetBusy = false;
 async function route() {
   const my = ++rid;
   clearInterval(timer); clearTimeout(bgTimer); stopIdle(); stopCam();
-  document.documentElement.style.setProperty("--c", "#d9b98c");
+  document.documentElement.style.setProperty("--c", "#ff6fae");
   document.title = SITE_NAME;
   setBg(null);
   const { data: { session } } = await sb.auth.getSession();
@@ -255,7 +255,7 @@ const genCode = () => "IPN-" + String(crypto.getRandomValues(new Uint32Array(1))
 async function eventPage(slug, others) {
   const { data: e } = await sb.from("events").select("*").eq("slug", slug || "").maybeSingle();
   if (!e) { show(`<div class="wrap"><h1 class="mini">Introuvable</h1><p>Cet événement n'existe pas.</p></div>`); return; }
-  document.documentElement.style.setProperty("--c", e.color || "#d9b98c");
+  document.documentElement.style.setProperty("--c", e.color || "#ff6fae");
   setBg(e);
   document.title = e.title;
   const { data: left } = await sb.rpc("places_restantes", { p_event: e.id });
@@ -487,21 +487,21 @@ async function mfaPage() {
 /* Billet téléchargeable : image PNG avec l'événement, le nom du titulaire et le QR code */
 async function downloadTicket(d, holder) {
   try {
-    try { await document.fonts.load("700 40px Fraunces"); await document.fonts.load("500 28px 'DM Sans'"); } catch { /* polices non chargées */ }
+    try { await document.fonts.load("700 40px Sora"); await document.fonts.load("500 28px 'DM Sans'"); } catch { /* polices non chargées */ }
     const W = 720, H = 1040, c = document.createElement("canvas"); c.width = W; c.height = H;
-    const x = c.getContext("2d"), col = getComputedStyle(document.documentElement).getPropertyValue("--c").trim() || "#d9b98c";
-    const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#0e1013"); g.addColorStop(1, "#23272c"); x.fillStyle = g; x.fillRect(0, 0, W, H);
+    const x = c.getContext("2d"), col = getComputedStyle(document.documentElement).getPropertyValue("--c").trim() || "#ff6fae";
+    const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#0a0820"); g.addColorStop(1, "#2a1d5c"); x.fillStyle = g; x.fillRect(0, 0, W, H);
     x.fillStyle = col; x.fillRect(0, 0, W, 14);
     x.textAlign = "center"; x.fillStyle = "#ffffff";
-    const fit = (t, size, max) => { do { x.font = `700 ${size}px 'Fraunces', Georgia, serif`; size -= 2; } while (x.measureText(t).width > max && size > 20); };
+    const fit = (t, size, max) => { do { x.font = `700 ${size}px 'Sora', sans-serif`; size -= 2; } while (x.measureText(t).width > max && size > 20); };
     fit(d.ev, 54, W - 80); x.fillText(d.ev, W / 2, 130);
-    x.font = "500 28px 'DM Sans', sans-serif"; x.fillStyle = "#cfc9bf";
+    x.font = "500 28px 'DM Sans', sans-serif"; x.fillStyle = "#cdc7f0";
     x.fillText(dt(d.when), W / 2, 190); if (d.venue) x.fillText(d.venue, W / 2, 232);
     const qr = new Image(); qr.src = await QRCode.toDataURL(ticketUrl(d.dl), { width: 520, margin: 1 }); await qr.decode();
     x.fillStyle = "#ffffff"; x.beginPath(); if (x.roundRect) x.roundRect(80, 290, 560, 560, 28); else x.rect(80, 290, 560, 560); x.fill(); x.drawImage(qr, 100, 310, 520, 520);
     x.fillStyle = "#ffffff"; x.font = "700 36px 'DM Sans', sans-serif"; x.fillText(holder, W / 2, 915);
     x.font = "700 30px monospace"; x.fillStyle = col; x.fillText(d.dl, W / 2, 965);
-    x.font = "400 22px 'DM Sans', sans-serif"; x.fillStyle = "#aaa69d"; x.fillText("1 billet · valable une seule fois · présente ce QR à l'entrée", W / 2, 1006);
+    x.font = "400 22px 'DM Sans', sans-serif"; x.fillStyle = "#b8b3dd"; x.fillText("1 billet · valable une seule fois · présente ce QR à l'entrée", W / 2, 1006);
     const blob = await new Promise(r => c.toBlob(r, "image/png"));
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `billet-${d.dl}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   } catch { alert("Téléchargement impossible. Fais plutôt une capture d'écran du billet."); }
@@ -601,7 +601,7 @@ async function adminEvents(box, editId) {
     <label>Date et heure de l'événement<input id="d" type="datetime-local" required value="${loc(ed?.starts_at)}"></label>
     <label>Ouverture de la billetterie<input id="o" type="datetime-local" required value="${loc(ed?.sales_open)}"></label>
     <label>Lieu<input id="v" value="${val("venue")}"></label><label>Dress code<input id="dc" value="${val("dress_code")}"></label>
-    <label>Couleur principale<input id="col" type="color" value="${esc(ed?.color || "#d9b98c")}"></label>
+    <label>Couleur principale<input id="col" type="color" value="${esc(ed?.color || "#ff6fae")}"></label>
     <label>Numéro T-Money pour le paiement<input id="pay" required value="${val("pay_number")}"></label>
     <label>Qui peut acheter ?<select id="aud"><option value="all">Tout le monde (visiteurs et étudiants)</option><option value="students">Étudiants seulement</option></select></label>
     <label>Nombre de places<input id="cap" type="number" min="1" value="${ed?.capacity ?? 200}" required></label>
