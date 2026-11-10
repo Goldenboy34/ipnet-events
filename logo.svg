@@ -1,0 +1,10 @@
+<svg class="lg" viewBox="0 0 512 512" role="img" aria-label="IPNET Events" xmlns="http://www.w3.org/2000/svg">
+<style>.lg-shine{display:none}.lg-glow{opacity:0}</style><defs><linearGradient id="lgg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb3dc"/><stop offset=".5" style="stop-color:var(--c,#f796cb)"/><stop offset="1" stop-color="#8b6bff"/></linearGradient>
+<clipPath id="lgc2"><path d="M96 130H416a32 32 0 0 1 32 32V226a30 30 0 0 0 0 60V350a32 32 0 0 1-32 32H96a32 32 0 0 1-32-32V286a30 30 0 0 0 0-60V162a32 32 0 0 1 32-32Z"/></clipPath><filter id="lgf2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="26"/></filter></defs>
+<ellipse class="lg-glow" cx="256" cy="256" rx="200" ry="140" style="fill:var(--c,#f796cb)" filter="url(#lgf2)"/>
+<g class="lg-tilt"><path fill="url(#lgg2)" d="M96 130H416a32 32 0 0 1 32 32V226a30 30 0 0 0 0 60V350a32 32 0 0 1-32 32H96a32 32 0 0 1-32-32V286a30 30 0 0 0 0-60V162a32 32 0 0 1 32-32Z"/>
+<g clip-path="url(#lgc2)"><rect class="lg-shine" x="30" y="110" width="70" height="290" fill="#fff" opacity=".38"/></g>
+<path class="lg-perf" d="M366 156V356" fill="none" stroke="#14091f" stroke-opacity=".35" stroke-width="6" stroke-linecap="round"/>
+<circle cx="398" cy="256" r="14" fill="#14091f" fill-opacity=".35"/><path class="lg-spark" d="M232 170Q246 242 318 256Q246 270 232 342Q218 270 146 256Q218 242 232 170Z" fill="#fff"/></g>
+
+</svg>
