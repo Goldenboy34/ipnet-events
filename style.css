@@ -188,3 +188,44 @@ h1{background-image:linear-gradient(120deg,#fff 18%,color-mix(in srgb,var(--c) 8
 nav{background:rgba(10,8,32,.6)}
 .compte b{background:linear-gradient(135deg,#fff,var(--c));-webkit-background-clip:text;background-clip:text;color:transparent}
 .palier.actif{background:linear-gradient(120deg,color-mix(in srgb,var(--c) 38%,transparent),rgba(124,92,255,.2))}
+
+/* ---------- Formulaires soignés ---------- */
+label{display:block;font-weight:600;font-size:.84rem;letter-spacing:.015em;color:var(--mu)}
+input,select,textarea{padding:.9rem 1rem;border:1.5px solid rgba(255,255,255,.14);border-radius:.95rem;background:rgba(255,255,255,.06);color:var(--tx);margin:.4rem 0 1.15rem;font-weight:500;transition:border-color .2s,box-shadow .2s,background .2s}
+input::placeholder,textarea::placeholder{color:rgba(255,255,255,.3);font-weight:400}
+input:hover,select:hover,textarea:hover{border-color:rgba(255,255,255,.28)}
+input:focus,select:focus,textarea:focus{border-color:var(--c);background:rgba(255,255,255,.09);box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 26%,transparent);outline:none}
+textarea{resize:vertical;line-height:1.5}
+select{appearance:none;cursor:pointer;padding-right:2.6rem;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23c9c4ee' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 1rem center}
+input[type=datetime-local],input[type=date]{color-scheme:dark}
+input[type=color]{height:3.3rem;padding:.3rem;cursor:pointer}
+input[type=file]{padding:.65rem;border-style:dashed;border-width:2px;cursor:pointer;color:var(--mu)}
+input[type=file]::file-selector-button{font:inherit;font-weight:700;margin-right:.9rem;padding:.55rem 1.1rem;border:0;border-radius:99px;background:linear-gradient(135deg,var(--c),color-mix(in srgb,var(--c) 40%,#7c5cff));color:#fff;cursor:pointer}
+input[type=radio],input[type=checkbox]{accent-color:var(--c);width:1.15rem;height:1.15rem;margin:0}
+label.radio{display:flex;align-items:center;gap:.75rem;padding:.9rem 1rem;border:1.5px solid rgba(255,255,255,.14);border-radius:.95rem;background:rgba(255,255,255,.05);font-weight:500;font-size:.95rem;color:var(--tx);margin-bottom:.6rem;cursor:pointer;transition:border-color .2s,background .2s,box-shadow .2s}
+label.radio:hover{border-color:rgba(255,255,255,.3)}
+label.radio:has(input:checked){border-color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 18%,transparent)}
+legend{font-weight:600;font-size:.84rem;color:var(--mu);margin-bottom:.6rem;letter-spacing:.015em}
+.formcard{background:linear-gradient(160deg,rgba(255,255,255,.1),rgba(255,255,255,.04));border:1px solid var(--bord);border-radius:1.5rem;padding:1.5rem;backdrop-filter:blur(14px);box-shadow:0 24px 60px -30px rgba(124,92,255,.7)}
+.formcard h3{font-family:'Sora',sans-serif;font-size:1.1rem}
+button.large{width:100%;padding:1.05rem;font-size:1.05rem;margin-top:.4rem}
+.grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1.1rem}
+.section{display:flex;align-items:center;gap:.65rem;margin:1.6rem 0 1rem;padding-top:1.2rem;border-top:1px solid var(--bord);font-family:'Sora',sans-serif;font-weight:600;font-size:1.02rem}
+.section::before{content:"";width:.6rem;height:.6rem;border-radius:50%;background:var(--c);box-shadow:0 0 14px var(--c)}
+/* achat en 3 étapes */
+.etape{display:grid;grid-template-columns:2.3rem 1fr;gap:1rem;padding-bottom:1.4rem;margin-bottom:1.4rem;border-bottom:1px dashed var(--bord)}
+.etape:last-of-type{border-bottom:0;margin-bottom:.6rem;padding-bottom:0}
+.num{width:2.3rem;height:2.3rem;border-radius:50%;display:grid;place-items:center;font-family:'Sora',sans-serif;font-weight:800;background:linear-gradient(135deg,var(--c),#7c5cff);color:#fff;box-shadow:0 8px 24px -8px var(--c)}
+.etape h3{margin:.3rem 0 .8rem}
+.stepper{display:flex;align-items:center;gap:.7rem}
+.stepper input{width:5.2rem;text-align:center;font-size:1.35rem;font-weight:800;margin:0;padding:.7rem .4rem;-moz-appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.stepper button{width:3.1rem;height:3.1rem;padding:0;font-size:1.6rem;line-height:1;border-radius:50%;display:grid;place-items:center}
+.total{margin-top:.9rem;font-size:1.05rem}.total b{font-family:'Sora',sans-serif;font-size:1.5rem;color:var(--c)}
+.paybox{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;border-radius:1.1rem;background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 42%,transparent)}
+.paybox .gros{font-family:'Sora',sans-serif;font-size:1.45rem;letter-spacing:.04em}
+.apercu img{max-width:100%;max-height:220px;border-radius:.9rem;border:1px solid var(--bord);margin:-.4rem 0 .6rem;display:block}
+@media(max-width:480px){.formcard{padding:1.15rem}.etape{grid-template-columns:1fr;gap:.5rem}.num{width:2rem;height:2rem}}
+.medias>p{grid-column:1/-1}
+
+.mixx{display:block;width:150px;height:auto;border-radius:.9rem;margin:0 0 .9rem;box-shadow:0 10px 30px -14px rgba(250,220,0,.5)}
