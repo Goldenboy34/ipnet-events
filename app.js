@@ -551,11 +551,11 @@ const sansAccent = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f
 
 async function adminPage() {
   clearInterval(timer); startIdle();
-  const onglets = [["orders", "Commandes"], ["events", "Événements"], ["accounts", "Comptes"], ["scan", "Contrôle d'entrée"], ["recon", "Rapprochement"], ["log", "Alertes et journal"]];
+  const onglets = [["orders", "Commandes"], ["events", "Événements"], ["accounts", "Comptes"], ["scan", "Contrôle d'entrée"], ["recon", "Rapprochement"], ["log", "Alertes et journal"], ["reset", "Réinitialiser"]];
   show(`<div class="wrap"><h1 class="mini">Administration</h1><br><div class="onglets">` +
     onglets.map(o => `<button class="${tab === o[0] ? "on" : ""}" data-t="${o[0]}">${o[1]}</button>`).join("") + `</div><div id="panel"></div></div>`);
   document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { tab = b.dataset.t; stopCam(); adminPage(); });
-  ({ orders: adminOrders, events: adminEvents, accounts: adminAccounts, scan: adminScan, recon: adminRecon, log: adminLog })[tab]($("panel"));
+  ({ orders: adminOrders, events: adminEvents, accounts: adminAccounts, scan: adminScan, recon: adminRecon, log: adminLog, reset: adminReset })[tab]($("panel"));
 }
 
 async function adminOrders(box) {
@@ -803,6 +803,36 @@ function adminScan(box) {
       }, 150);
     } catch (e) { $("camz").innerHTML = flash("Impossible d'accéder à la caméra (" + (e.name || "erreur") + "). Autorise-la dans le navigateur, ou saisis le code à la main."); }
   };
+}
+
+async function adminReset(box) {
+  const cnt = async (t, f) => { let q = sb.from(t).select("id", { count: "exact", head: true }); if (f) q = f(q); return (await q).count ?? 0; };
+  const [nT, nO, nE, nU, nA, nL] = await Promise.all([cnt("tickets"), cnt("orders"), cnt("events"), cnt("profiles", q => q.neq("role", "admin")), cnt("alerts"), cnt("admin_log")]);
+  const actions = [
+    ["journal", "Journal et alertes", `${nL} ligne(s) de journal et ${nA} alerte(s) effacées.`],
+    ["commandes", "Commandes, billets et rapprochement", `${nO} commande(s), ${nT} billet(s) et les captures de paiement effacés. Le rapprochement et les compteurs d'entrées repartent à zéro. Les événements et les comptes sont gardés.`],
+    ["comptes", "Comptes clients", `${nU} compte(s) clients effacés, avec leurs commandes et billets. Les administrateurs sont gardés.`],
+    ["evenements", "Événements", `${nE} événement(s) effacés, avec leurs commandes, billets et fonds d'écran.`],
+    ["tout", "TOUT réinitialiser", "Journal, alertes, commandes, billets, comptes clients et événements : le site repart à neuf. Seuls les administrateurs sont gardés."]
+  ];
+  box.innerHTML = `<p class="petit-texte" style="margin-bottom:1rem">Ces actions sont définitives. Pour confirmer, tape <b>REINITIALISER</b> dans le champ de l'action voulue.</p>` +
+    actions.map(([k, t, d]) => `<div class="carte ${k === "tout" ? "pay" : ""}"><b>${t}</b><p class="petit-texte" style="margin:.4rem 0 .8rem">${d}</p>
+      <div class="ligne g"><input id="c-${k}" autocomplete="off" placeholder="REINITIALISER" style="margin:0;max-width:14rem"><button class="petit danger" data-r="${k}">${k === "tout" ? "Tout effacer" : "Effacer"}</button></div></div>`).join("") + `<div id="rres"></div>`;
+  box.querySelectorAll("[data-r]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.r, out = $("rres");
+    if ($("c-" + k).value.trim().toUpperCase() !== "REINITIALISER") return out.innerHTML = flash("Tape REINITIALISER dans le champ de cette action pour confirmer.");
+    if (!confirm("Dernière confirmation : cette action est définitive. Continuer ?")) return;
+    b.disabled = true; out.innerHTML = flash("Effacement en cours…", true);
+    // fichiers à nettoyer côté stockage (captures de paiement, fonds d'événements), récupérés avant l'effacement
+    const proofs = ["commandes", "comptes", "evenements", "tout"].includes(k) ? ((await sb.from("orders").select("proof_path").limit(5000)).data || []).map(o => o.proof_path).filter(Boolean) : [];
+    const media = ["evenements", "tout"].includes(k) ? ((await sb.from("events").select("bg_media,bg_url")).data || []).flatMap(e => [...(e.bg_media || []).map(m => m.url), e.bg_url]).map(u => String(u || "").split("/event-media/")[1]).filter(Boolean) : [];
+    const r = await rpc("admin_reset", { p_scope: k });
+    if (r.error) { b.disabled = false; return out.innerHTML = flash(`${r.error} [${r.raw || ""}]`); }
+    const rm = async (bucket, names) => { for (let i = 0; i < names.length; i += 100) await sb.storage.from(bucket).remove(names.slice(i, i + 100)).catch(() => {}); };
+    await rm("proofs", proofs); await rm("event-media", media);
+    confetti(); out.innerHTML = flash("Réinitialisation terminée.", true);
+    setTimeout(() => adminPage(), 1200);
+  });
 }
 
 async function adminRecon(box) {
