@@ -56,7 +56,7 @@ const errMsg = e => {
 };
 const rpc = async (name, args) => {
   const { data, error } = await sb.rpc(name, args);
-  if (error) return { error: errMsg(error) };
+  if (error) return { error: errMsg(error), raw: error.message };
   if (data && typeof data === "object" && data.error) return { error: errMsg(data.error), code: data.error };
   return { data };
 };
@@ -765,7 +765,7 @@ function adminScan(box) {
     if (busy || !code) return; busy = true;
     try {
       const r = await rpc("admin_scan_ticket", { p_code: code, p_mark: $("auto").checked });
-      if (r.error) res.innerHTML = flash(r.error); else { render(r.data, code); loadStats(); }
+      if (r.error) res.innerHTML = flash(`${r.error} [${r.raw || ""}] · lu : ${code}`); else { render(r.data, code); loadStats(); }
     } finally { busy = false; }
   }
   $("f").onsubmit = ev => { ev.preventDefault(); scan($("code").value); };
@@ -773,31 +773,35 @@ function adminScan(box) {
   $("camoff").onclick = () => { stopCam(); $("camz").innerHTML = ""; $("camoff").hidden = true; $("cam").hidden = false; };
   $("cam").onclick = async () => {
     if (!navigator.mediaDevices?.getUserMedia) return $("camz").innerHTML = flash("Ce navigateur ne permet pas d'utiliser la caméra. Scanne avec l'appareil photo du téléphone ou saisis le code.");
+    if (typeof jsQR === "undefined") return $("camz").innerHTML = flash("Le fichier jsQR.js est absent du site. Ajoute-le sur GitHub (au même niveau que index.html), puis recharge la page.");
     try {
       stopCam();
       camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } }, audio: false });
-      $("camz").innerHTML = `<div class="viseur"><video class="cam" id="vid" playsinline muted></video><i></i></div><p class="petit-texte">Place le QR code dans le cadre : il est lu tout seul, puis le scan continue pour le billet suivant.</p>`;
+      $("camz").innerHTML = `<div class="viseur"><video class="cam" id="vid" playsinline muted autoplay></video><i></i></div><p class="petit-texte" id="etat">Recherche d'un QR code…</p>`;
       $("cam").hidden = true; $("camoff").hidden = false;
       const v = $("vid"); v.srcObject = camStream; await v.play();
       const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true });
-      const hasBD = "BarcodeDetector" in window, det = hasBD ? new BarcodeDetector({ formats: ["qr_code"] }) : null;
+      let det = null;
+      try { if ("BarcodeDetector" in window && (await BarcodeDetector.getSupportedFormats()).includes("qr_code")) det = new BarcodeDetector({ formats: ["qr_code"] }); } catch { det = null; }
+      const lire = async () => {
+        if (det) { try { const c = await det.detect(v); if (c[0]?.rawValue) return c[0].rawValue; } catch { det = null; } }
+        const k = Math.min(1, 960 / v.videoWidth); cv.width = v.videoWidth * k | 0; cv.height = v.videoHeight * k | 0;
+        cx.drawImage(v, 0, 0, cv.width, cv.height);
+        const img = cx.getImageData(0, 0, cv.width, cv.height);
+        return jsQR(img.data, img.width, img.height, { inversionAttempts: "attemptBoth" })?.data || "";
+      };
       camTimer = setInterval(async () => {
         if (!v.videoWidth || busy) return;
         let raw = "";
-        try {
-          if (det) { const c = await det.detect(v); raw = c[0]?.rawValue || ""; }
-          else {
-            const k = Math.min(1, 640 / v.videoWidth); cv.width = v.videoWidth * k | 0; cv.height = v.videoHeight * k | 0;
-            cx.drawImage(v, 0, 0, cv.width, cv.height);
-            const img = cx.getImageData(0, 0, cv.width, cv.height); raw = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" })?.data || "";
-          }
-        } catch { /* image pas prête */ }
+        try { raw = await lire(); } catch (e) { if ($("etat")) $("etat").textContent = "Erreur de lecture : " + e.message; return; }
         const code = codeOf(raw);
         if (!code) return;
         if (code === last && Date.now() - lastT < 6000) return; // même billet encore devant la caméra
-        last = code; lastT = Date.now(); scan(code);
+        last = code; lastT = Date.now();
+        if ($("etat")) $("etat").textContent = "QR lu : " + raw.slice(0, 60);
+        scan(code);
       }, 150);
-    } catch { $("camz").innerHTML = flash("Impossible d'accéder à la caméra. Autorise-la dans le navigateur, ou saisis le code à la main."); }
+    } catch (e) { $("camz").innerHTML = flash("Impossible d'accéder à la caméra (" + (e.name || "erreur") + "). Autorise-la dans le navigateur, ou saisis le code à la main."); }
   };
 }
 
