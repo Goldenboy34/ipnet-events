@@ -232,8 +232,8 @@ async function home() {
   const { data } = await sb.from("events").select("*").eq("active", true).order("starts_at");
   const en = (data || []).filter(e => Date.parse(e.starts_at) + 12 * 36e5 > Date.now());
   if (en.length) return eventPage(en[0].slug, en.slice(1));
-  show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les événements<br>du campus</h1>
-    <p class="sous">Réserve ta place, paie par Mixx by Yas et reçois ton billet avec QR code.</p></div></div>
+  show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les Gbingbances<br>du campus</h1>
+    <p class="sous">Réserve ton billet dès maintenant.</p></div></div>
     <div class="wrap"><h2>À venir</h2>` +
     (data?.length ? data.map(e => `<a class="carte ev rv" style="--ec:${esc(e.color)}" href="#/e/${esc(e.slug)}"><b>${esc(e.title)}</b>
       <span class="badge none" style="margin-left:.5rem">${e.audience === "all" ? "Ouvert à tous" : "Étudiants"}</span><br>${dt(e.starts_at)} · ${esc(e.venue || "Lieu bientôt annoncé")}</a>`).join("")
@@ -320,7 +320,7 @@ async function eventPage(slug, others) {
   zone.innerHTML = `<form id="f" class="formcard">
     <div class="etape"><span class="num">1</span><div><h3>Combien de billets ?</h3>
       <div class="stepper"><button type="button" id="mn" aria-label="Moins">−</button><input type="number" id="qty" min="1" max="10" value="1" required aria-label="Nombre de billets"><button type="button" id="pl" aria-label="Plus">+</button></div>
-      <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte">Le prix final est fixé par le serveur.</p></div></div>
+      <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte"></p></div></div>
     <div class="etape"><span class="num">2</span><div><h3>Paie par Mixx by Yas</h3>
       <img class="mixx" src="mixx.png" alt="Mixx by Yas" width="150" height="116">
       <div class="paybox"><div><span class="petit-texte">Numéro à payer</span><br><b class="gros">${esc(e.pay_number)}</b></div><button type="button" class="petit" id="cp">Copier</button></div>
@@ -544,6 +544,29 @@ async function mePage() {
   document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch (e) { i.replaceWith(document.createTextNode("QR indisponible : donne le code ci-dessous à l'entrée.")); } });
   document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => downloadTicket(btn.dataset, p.full_name || ""));
   $("all").onclick = async () => { await sb.auth.signOut({ scope: "global" }); location.hash = "#/login"; };
+  const zd = document.createElement("div"); zd.className = "wrap"; zd.style.marginTop = "0";
+  zd.innerHTML = `<h2>Mes données</h2><div class="carte"><p class="petit-texte" style="margin-bottom:.8rem">Tu peux télécharger une copie de tes données, ou supprimer définitivement ton compte avec tes commandes, tes billets et tes captures de paiement. Les billets non utilisés ne seront plus valables.</p>
+    <div class="ligne g"><button class="petit" id="exp">Télécharger mes données</button></div>
+    <div class="ligne g" style="margin-top:.8rem"><input id="cdel" autocomplete="off" placeholder="Tape SUPPRIMER" style="margin:0;max-width:14rem"><button class="petit danger" id="del">Supprimer mon compte et mes données</button></div><div id="dres" style="margin-top:.8rem"></div></div>`;
+  app.appendChild(zd);
+  $("exp").onclick = () => {
+    const out = { compte: { nom: p.full_name, email: me.email, telephone: p.phone, type: TYPES[p.account_type] }, commandes: (data || []).map(o => ({ evenement: o.events?.title, date_evenement: o.events?.starts_at, commande: o.order_code, reference: o.reference, total: o.total, statut: o.status, passee_le: o.created_at, billets: (o.tickets || []).map(t => ({ code: t.code, statut: t.status, entree_le: t.used_at })) })) };
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" })); a.download = "mes-donnees-ipnet-events.json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  };
+  $("del").onclick = async () => {
+    const out = $("dres");
+    if (profile?.role === "admin") return out.innerHTML = flash("Un compte administrateur ne peut pas être supprimé ici.");
+    if ($("cdel").value.trim().toUpperCase() !== "SUPPRIMER") return out.innerHTML = flash("Tape SUPPRIMER dans le champ pour confirmer.");
+    if (!confirm("Dernière confirmation : ton compte, tes commandes et tes billets seront effacés définitivement. Continuer ?")) return;
+    $("del").disabled = true; out.innerHTML = flash("Suppression en cours…", true);
+    const paths = (data || []).map(o => o.proof_path).filter(Boolean);
+    if (paths.length) await sb.storage.from("proofs").remove(paths).catch(() => {});
+    const r = await rpc("delete_my_account", {});
+    if (r.error) { $("del").disabled = false; return out.innerHTML = flash(r.error); }
+    await sb.auth.signOut().catch(() => {});
+    notice = "";
+    location.hash = "#/"; route();
+  };
 }
 
 /* ---------- Administration ---------- */
