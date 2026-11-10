@@ -26,7 +26,7 @@ const TYPES = { visitor: "Visiteur", student: "Étudiant" };
 const AUD = { all: "Ouvert à tous", students: "Réservé aux étudiants" };
 const ALERTE = {
   reference_reutilisee: "Référence réutilisée",
-  capture_reutilisee: "Capture réutilisée", numero_partage: "Numéro T-Money partagé",
+  capture_reutilisee: "Capture réutilisée", numero_partage: "Numéro Mixx by Yas partagé",
   grosse_commande: "Grosse commande", compte_bloque_auto: "Blocage automatique"
 };
 
@@ -38,7 +38,7 @@ const ERR = {
   reserve_etudiants: "Cet événement est réservé aux étudiants.",
   quantite_invalide: "Quantité invalide (1 à 10).", trop_de_commandes_en_attente: "Tu as déjà 3 commandes en attente. Attends leur validation.",
   aucun_tarif: "Aucun tarif n'est actif aujourd'hui.", complet: "Plus assez de places disponibles.",
-  reference_invalide: "Référence de transaction invalide (6 à 40 lettres/chiffres).", numero_invalide: "Numéro T-Money invalide (8 chiffres).",
+  reference_invalide: "Référence de transaction invalide (6 à 40 lettres/chiffres).", numero_invalide: "Numéro Mixx by Yas invalide (8 chiffres).",
   code_invalide: "Code de commande invalide.", capture_invalide: "Capture de paiement invalide.",
   reference_deja_utilisee: "Cette référence de transaction a déjà servi pour une autre commande.",
   capture_deja_utilisee: "Cette capture a déjà été envoyée pour une autre commande.",
@@ -232,7 +232,7 @@ async function home() {
   const en = (data || []).filter(e => Date.parse(e.starts_at) + 12 * 36e5 > Date.now());
   if (en.length) return eventPage(en[0].slug, en.slice(1));
   show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les événements<br>du campus</h1>
-    <p class="sous">Réserve ta place, paie par T-Money et reçois ton billet avec QR code.</p></div></div>
+    <p class="sous">Réserve ta place, paie par Mixx by Yas et reçois ton billet avec QR code.</p></div></div>
     <div class="wrap"><h2>À venir</h2>` +
     (data?.length ? data.map(e => `<a class="carte ev rv" style="--ec:${esc(e.color)}" href="#/e/${esc(e.slug)}"><b>${esc(e.title)}</b>
       <span class="badge none" style="margin-left:.5rem">${e.audience === "all" ? "Ouvert à tous" : "Étudiants"}</span><br>${dt(e.starts_at)} · ${esc(e.venue || "Lieu bientôt annoncé")}</a>`).join("")
@@ -310,17 +310,24 @@ async function eventPage(slug, others) {
   }
 
   let code = genCode();
-  zone.innerHTML = `<form id="f" class="carte">
-    <label>Nombre de billets<input type="number" id="qty" min="1" max="10" value="1" required></label>
-    <p>Total à payer : <b id="tot">${fmt(p0.prix)}</b> <span class="petit-texte">(le prix final est fixé par le serveur)</span></p><br>
-    <div class="carte pay"><b>Comment payer :</b><br>Envoie le montant par <b>T-Money</b> au <b>${esc(e.pay_number)}</b>.<br>
-      Code de commande : <b id="oc">${code}</b> — écris-le dans le motif du paiement si T-Money le permet.<br>
-      Ensuite remplis les champs ci-dessous. Ton billet sera disponible après vérification.</div>
-    <label>Numéro T-Money avec lequel tu as payé<input id="pn" type="tel" inputmode="numeric" placeholder="90123456" required></label>
-    <label>Référence de la transaction (dans le SMS de confirmation)<input id="ref" required minlength="6" maxlength="40" autocomplete="off"></label>
-    <label>Capture d'écran du paiement (JPG, PNG ou WebP, 5 Mo max)<input type="file" id="img" accept="image/jpeg,image/png,image/webp" required></label>
-    <button class="plein" id="go">Envoyer ma commande</button><div id="err" style="margin-top:1rem"></div></form>`;
-  $("qty").oninput = () => $("tot").textContent = fmt(p0.prix * Math.min(10, Math.max(1, +$("qty").value || 1)));
+  zone.innerHTML = `<form id="f" class="formcard">
+    <div class="etape"><span class="num">1</span><div><h3>Combien de billets ?</h3>
+      <div class="stepper"><button type="button" id="mn" aria-label="Moins">−</button><input type="number" id="qty" min="1" max="10" value="1" required aria-label="Nombre de billets"><button type="button" id="pl" aria-label="Plus">+</button></div>
+      <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte">Le prix final est fixé par le serveur.</p></div></div>
+    <div class="etape"><span class="num">2</span><div><h3>Paie par Mixx by Yas</h3>
+      <img class="mixx" src="mixx.png" alt="Mixx by Yas" width="150" height="116">
+      <div class="paybox"><div><span class="petit-texte">Numéro à payer</span><br><b class="gros">${esc(e.pay_number)}</b></div><button type="button" class="petit" id="cp">Copier</button></div>
+      <p style="margin-top:.8rem">Code de commande : <b id="oc">${code}</b></p><p class="petit-texte">Écris-le dans le motif du paiement si Mixx by Yas le permet. Ton billet sera disponible après vérification.</p></div></div>
+    <div class="etape"><span class="num">3</span><div><h3>Confirme ton paiement</h3>
+      <label>Numéro Mixx by Yas avec lequel tu as payé<input id="pn" type="tel" inputmode="numeric" placeholder="90123456" required></label>
+      <label>Référence de la transaction (dans le SMS de confirmation)<input id="ref" required minlength="6" maxlength="40" autocomplete="off" placeholder="Ex : 7H3K29A1B4"></label>
+      <label>Capture d'écran du paiement (JPG, PNG ou WebP, 5 Mo max)<input type="file" id="img" accept="image/jpeg,image/png,image/webp" required></label><div id="apercu" class="apercu"></div></div></div>
+    <button class="plein large" id="go">Envoyer ma commande</button><div id="err" style="margin-top:1rem"></div></form>`;
+  const setQty = n => { $("qty").value = Math.min(10, Math.max(1, n)); $("tot").textContent = fmt(p0.prix * +$("qty").value); };
+  $("qty").oninput = () => { if ($("qty").value !== "") setQty(+$("qty").value || 1); };
+  $("mn").onclick = () => setQty(+$("qty").value - 1); $("pl").onclick = () => setQty(+$("qty").value + 1);
+  $("cp").onclick = async () => { try { await navigator.clipboard.writeText(e.pay_number); $("cp").textContent = "Copié ✓"; setTimeout(() => $("cp").textContent = "Copier", 1800); } catch { $("cp").textContent = "Copie à la main"; } };
+  $("img").onchange = () => { const f = $("img").files[0]; $("apercu").innerHTML = f && /^image\//.test(f.type) ? `<img src="${URL.createObjectURL(f)}" alt="Aperçu de la capture">` : ""; };
   $("f").onsubmit = async ev => {
     ev.preventDefault(); const go = $("go"); go.disabled = true; go.textContent = "Envoi…";
     const fail = m => { $("err").innerHTML = flash(m); go.disabled = false; go.textContent = "Envoyer ma commande"; };
@@ -349,7 +356,7 @@ function loginPage(aud) {
   const draw = (m = "") => {
     const titre = { login: "Connexion", signup: "Créer un compte", forgot: "Mot de passe oublié", reset: "Nouveau mot de passe" }[mode];
     show(`<div class="wrap" style="max-width:480px"><h1 class="mini">${titre}</h1><br><div id="m">${m}</div>
-      <form id="f" novalidate>
+      <form id="f" class="formcard" novalidate>
       ${mode === "signup" ? `
         <label>Prénom<input id="pn" autocomplete="given-name" required maxlength="60"></label>
         <label>Nom<input id="nm" autocomplete="family-name" required maxlength="60"></label>
@@ -569,7 +576,7 @@ async function adminOrders(box) {
     (list.length ? list.map(o => `<div class="carte"><div class="ligne"><b>${esc(o.profiles?.full_name)} · ${esc(o.profiles?.phone)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
       <p class="petit-texte">${esc(TYPES[o.profiles?.account_type])} · ${esc(o.events.title)} · ${o.qty} billet(s)</p>
       <div class="scroll"><table class="cmp"><tr><th>Montant à retrouver</th><td><b>${fmt(o.total)}</b> (${o.qty} × ${fmt(o.unit_price)})</td></tr>
-        <tr><th>Référence T-Money</th><td>${esc(o.reference)}</td></tr><tr><th>Numéro payeur</th><td>${esc(o.pay_phone)}</td></tr>
+        <tr><th>Référence Mixx by Yas</th><td>${esc(o.reference)}</td></tr><tr><th>Numéro payeur</th><td>${esc(o.pay_phone)}</td></tr>
         <tr><th>Heure de la commande</th><td>${dts(o.created_at)} (heure de Lomé)</td></tr><tr><th>Code de commande</th><td>${esc(o.order_code)}</td></tr></table></div>
       <div class="ligne g"><button class="petit" data-proof="${esc(o.proof_path)}">Voir la capture</button>
       ${o.status === "pending" ? `<button class="petit plein" data-ok="${o.id}">Confirmer</button><button class="petit danger" data-no="${o.id}">Refuser</button>` : ""}</div>
@@ -582,7 +589,7 @@ async function adminOrders(box) {
     if (error) return alert("Impossible d'ouvrir la capture.");
     window.open(u.signedUrl, "_blank", "noopener");
   });
-  box.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => { if (confirm("Confirmer cette commande ?\nVérifie d'abord que l'argent est bien arrivé dans T-Money (montant, référence, numéro).")) act("admin_decide_order", { p_order: b.dataset.ok, p_decision: "confirm" }, "confetti"); });
+  box.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => { if (confirm("Confirmer cette commande ?\nVérifie d'abord que l'argent est bien arrivé dans Mixx by Yas (montant, référence, numéro).")) act("admin_decide_order", { p_order: b.dataset.ok, p_decision: "confirm" }, "confetti"); });
   box.querySelectorAll("[data-no]").forEach(b => b.onclick = () => { if (confirm("Refuser cette commande ?")) act("admin_decide_order", { p_order: b.dataset.no, p_decision: "reject" }); });
   box.querySelectorAll("[data-cancel]").forEach(b => b.onclick = () => { if (confirm("Annuler ce billet ? Il sera refusé à l'entrée.")) act("admin_cancel_ticket", { p_ticket: b.dataset.cancel }); });
 }
@@ -595,23 +602,26 @@ async function adminEvents(box, editId) {
   const val = k => esc(ed?.[k] ?? "");
   let medias = ed ? (Array.isArray(ed.bg_media) && ed.bg_media.length ? ed.bg_media.slice() : (ed.bg_url ? [{ url: ed.bg_url, kind: ed.bg_kind }] : [])) : [];
   const removed = [];
-  box.innerHTML = `<form id="f" class="carte"><b>${ed ? "Modifier : " + esc(ed.title) : "Nouvel événement"}</b><br><br>
-    <label>Titre<input id="t" required maxlength="120" value="${val("title")}"></label><label>Slogan<input id="s" maxlength="200" value="${val("tagline")}"></label>
-    <label>Adresse du lien (ex : pink-white)<input id="slug" pattern="[a-z0-9\\-]{2,60}" required value="${val("slug")}"></label>
-    <label>Date et heure de l'événement<input id="d" type="datetime-local" required value="${loc(ed?.starts_at)}"></label>
-    <label>Ouverture de la billetterie<input id="o" type="datetime-local" required value="${loc(ed?.sales_open)}"></label>
-    <label>Lieu<input id="v" value="${val("venue")}"></label><label>Dress code<input id="dc" value="${val("dress_code")}"></label>
-    <label>Couleur principale<input id="col" type="color" value="${esc(ed?.color || "#ff6fae")}"></label>
-    <label>Numéro T-Money pour le paiement<input id="pay" required value="${val("pay_number")}"></label>
+  box.innerHTML = `<form id="f" class="formcard"><h3 style="margin-bottom:.6rem">${ed ? "Modifier : " + esc(ed.title) : "Nouvel événement"}</h3>
+    <div class="section" style="border:0;margin-top:.6rem">L'événement</div>
+    <div class="grille"><label>Titre<input id="t" required maxlength="120" value="${val("title")}" placeholder="Soirée Amapiano"></label><label>Slogan (facultatif)<input id="s" maxlength="200" value="${val("tagline")}" placeholder="La nuit de l'amapiano"></label></div>
+    <label>Adresse du lien (minuscules et tirets)<input id="slug" pattern="[a-z0-9\\-]{2,60}" required value="${val("slug")}" placeholder="soiree-amapiano"></label>
+    <div class="section">Quand et où</div>
+    <div class="grille"><label>Date et heure de l'événement<input id="d" type="datetime-local" required value="${loc(ed?.starts_at)}"></label><label>Ouverture de la billetterie<input id="o" type="datetime-local" required value="${loc(ed?.sales_open)}"></label></div>
+    <div class="grille"><label>Lieu<input id="v" value="${val("venue")}" placeholder="IPNET Assiyeye"></label><label>Dress code<input id="dc" value="${val("dress_code")}" placeholder="All white"></label></div>
+    <p class="petit-texte" style="margin-top:-.5rem">Heures saisies en heure de Lomé (UTC).</p>
+    <div class="section">La vente</div>
+    <div class="grille"><label>Numéro Mixx by Yas pour le paiement<input id="pay" required value="${val("pay_number")}" inputmode="numeric"></label>
+    <label>Nombre de places<input id="cap" type="number" min="1" value="${ed?.capacity ?? 200}" required></label></div>
     <label>Qui peut acheter ?<select id="aud"><option value="all">Tout le monde (visiteurs et étudiants)</option><option value="students">Étudiants seulement</option></select></label>
-    <label>Nombre de places<input id="cap" type="number" min="1" value="${ed?.capacity ?? 200}" required></label>
-    <label>Paliers de prix (une ligne par palier : prix;début;fin)<textarea id="tiers" rows="3" placeholder="5000;2026-11-17;2026-12-05&#10;7000;2026-12-06;2026-12-16">${esc(tiersTxt)}</textarea></label>
-    <fieldset><legend>Fond de la page : images et vidéos (8 maximum, elles défilent toutes seules)</legend>
+    <label>Paliers de prix : une ligne par palier, au format prix;début;fin<textarea id="tiers" rows="3" placeholder="2000;2026-11-10;2026-11-20&#10;3000;2026-11-21;2026-12-05">${esc(tiersTxt)}</textarea></label>
+    <div class="section">L'ambiance</div>
+    <label>Couleur principale de la page<input id="col" type="color" value="${esc(ed?.color || "#ff6fae")}"></label>
+    <fieldset><legend>Fonds de la page : images et vidéos (8 maximum, elles défilent toutes seules)</legend>
     <div id="medias" class="medias"></div>
     <label>Ajouter des images (JPG, PNG, WebP) ou des vidéos courtes (MP4, WebM, 40 Mo max chacune)<input id="bg" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"></label></fieldset>
-    <p class="petit-texte">Heures saisies en heure de Lomé (UTC). Conseil : vidéo de 10 à 20 secondes, sans son, moins de 10 Mo, pour que la page reste rapide sur téléphone.</p><br>
-    <button class="plein" id="sv">${ed ? "Enregistrer les modifications" : "Créer l'événement"}</button>
-    ${ed ? `<button type="button" id="cn">Annuler</button>` : ""}<div id="err" style="margin-top:1rem"></div></form>
+    <p class="petit-texte">Conseil : vidéo de 10 à 20 secondes, sans son, moins de 10 Mo, pour que la page reste rapide sur téléphone.</p><br>
+    <div class="ligne g"><button class="plein large" id="sv">${ed ? "Enregistrer les modifications" : "Créer l'événement"}</button>${ed ? `<button type="button" id="cn">Annuler</button>` : ""}</div><div id="err" style="margin-top:1rem"></div></form>
     <h2>Événements existants</h2>` + (data || []).map(e => `<div class="carte"><div class="ligne"><span><b>${esc(e.title)}</b> · ${dt(e.starts_at)}${e.active ? "" : ` <span class="badge none">Masqué</span>`}<br>
     <span class="petit-texte">Lien : #/e/${esc(e.slug)} · ${esc(AUD[e.audience])} · ${e.capacity} places</span></span>
     <span class="ligne g"><button class="petit" data-ed="${e.id}">Modifier</button><button class="petit" data-hide="${e.id}">${e.active ? "Masquer" : "Afficher"}</button><button class="petit danger" data-del="${e.id}">Supprimer</button></span></div></div>`).join("");
@@ -840,7 +850,7 @@ async function adminRecon(box) {
     sb.from("events").select("id,title,starts_at,capacity").order("starts_at", { ascending: false }),
     sb.from("orders").select("*, profiles!orders_user_id_fkey(full_name,phone)").eq("status", "confirmed")
   ]);
-  box.innerHTML = `<p class="petit-texte" style="margin-bottom:1rem">Compare le total attendu avec le total réellement reçu dans T-Money. Un écart révèle une erreur ou une fraude.</p>` +
+  box.innerHTML = `<p class="petit-texte" style="margin-bottom:1rem">Compare le total attendu avec le total réellement reçu dans Mixx by Yas. Un écart révèle une erreur ou une fraude.</p>` +
     (evs || []).map(e => {
       const o = (ords || []).filter(x => x.event_id === e.id);
       return `<div class="carte"><b>${esc(e.title)}</b><div class="stats" style="margin:.8rem 0 0"><div><b>${o.reduce((n, x) => n + x.qty, 0)} / ${e.capacity}</b>billets confirmés</div>
