@@ -125,6 +125,7 @@ async function route() {
   clearInterval(timer); stopIdle(); stopCam();
   document.documentElement.style.setProperty("--c", "#f796cb");
   document.title = SITE_NAME;
+  setBg(null);
   const { data: { session } } = await sb.auth.getSession();
   if (location.search || /access_token|error_description/.test(location.hash)) {
     history.replaceState(null, "", location.pathname + (location.hash.startsWith("#/") ? location.hash : ""));
@@ -147,7 +148,7 @@ async function route() {
 
   const [, a, b] = location.hash.split("/");
   if (a === "e") return eventPage(b);
-  if (a === "login") return me ? (location.hash = "#/me") : loginPage(b);
+  if (a === "login") return me ? (location.hash = "#/") : loginPage(b);
   if (a === "reset") return resetPage();
   if (a === "mfa") return mfaPage();
   if (a === "me") return mePage();
@@ -166,8 +167,24 @@ sb.auth.onAuthStateChange((ev, s) => {
 });
 
 /* ---------- Accueil ---------- */
+/* Fond de la page : image ou vidéo de l'événement + lumières animées */
+function setBg(e) {
+  let f = $("fond");
+  if (!f) { f = document.createElement("div"); f.id = "fond"; f.setAttribute("aria-hidden", "true"); document.body.prepend(f); }
+  if (!e) { f.innerHTML = ""; return; }
+  const url = e.bg_url && /^https:\/\/[a-z0-9-]+\.supabase\.co\//.test(e.bg_url) ? e.bg_url : null;
+  let media = "";
+  if (url && e.bg_kind === "video" && !REDUCE) media = `<video src="${esc(url)}" autoplay muted loop playsinline preload="auto"></video>`;
+  else if (url && e.bg_kind === "image") media = `<img src="${esc(url)}" alt="">`;
+  f.innerHTML = media + `<div class="teinte"></div><i class="l1"></i><i class="l2"></i><i class="l3"></i>`;
+  const v = f.querySelector("video"); if (v) v.play().catch(() => {});
+}
+
+/* L'événement en cours s'affiche directement ; les autres sont listés dessous */
 async function home() {
   const { data } = await sb.from("events").select("*").eq("active", true).order("starts_at");
+  const en = (data || []).filter(e => Date.parse(e.starts_at) + 12 * 36e5 > Date.now());
+  if (en.length) return eventPage(en[0].slug, en.slice(1));
   show(`<div class="hero"><div class="wrap"><p class="pill">IPNET Institute of Technology</p><h1>Les événements<br>du campus</h1>
     <p class="sous">Réserve ta place, paie par T-Money et reçois ton billet avec QR code.</p></div></div>
     <div class="wrap"><h2>À venir</h2>` +
@@ -191,10 +208,11 @@ function eligible(e, p) {
 }
 const genCode = () => "IPN-" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, "0");
 
-async function eventPage(slug) {
+async function eventPage(slug, others) {
   const { data: e } = await sb.from("events").select("*").eq("slug", slug || "").maybeSingle();
   if (!e) { show(`<div class="wrap"><h1 class="mini">Introuvable</h1><p>Cet événement n'existe pas.</p></div>`); return; }
   document.documentElement.style.setProperty("--c", e.color || "#f796cb");
+  setBg(e);
   document.title = e.title;
   const { data: left } = await sb.rpc("places_restantes", { p_event: e.id });
   const tiers = e.tiers || [];
@@ -209,7 +227,8 @@ async function eventPage(slug) {
     <div><dt>Accès</dt><dd>${esc(AUD[e.audience])}</dd></div>
     <div><dt>Places restantes</dt><dd>${left == null ? "—" : Math.max(0, left)}</dd></div></dl>
     <h2 class="rv">Les tarifs</h2><div id="paliers" class="rv"></div>
-    <h2 class="rv">Acheter un billet</h2><div id="achat" class="rv"></div></div>`);
+    <h2 class="rv">Acheter un billet</h2><div id="achat" class="rv"></div>
+    ${others?.length ? `<h2 class="rv">Autres événements</h2>` + others.map(o => `<a class="carte ev rv" style="--ec:${esc(o.color)}" href="#/e/${esc(o.slug)}"><b>${esc(o.title)}</b><br>${dt(o.starts_at)} · ${esc(o.venue || "Lieu bientôt annoncé")}</a>`).join("") : ""}</div>`);
 
   const prev = {}; let lastP;
   function tick() {
@@ -320,7 +339,7 @@ function loginPage(aud) {
       const password = $("pw").value;
       if (mode === "login") {
         const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: token } });
-        if (!error) { location.hash = "#/me"; return; }
+        if (!error) { location.hash = "#/"; route(); return; }
         done();
         if (/not confirmed/i.test(error.message)) return say("Email non confirmé : clique sur le lien reçu par email.");
         if (error.status === 429) return say(ERR["rate limit"]);
@@ -528,28 +547,81 @@ async function adminOrders(box) {
   box.querySelectorAll("[data-cancel]").forEach(b => b.onclick = () => { if (confirm("Annuler ce billet ? Il sera refusé à l'entrée.")) act("admin_cancel_ticket", { p_ticket: b.dataset.cancel }); });
 }
 
-async function adminEvents(box) {
+async function adminEvents(box, editId) {
   const { data } = await sb.from("events").select("*").order("starts_at", { ascending: false });
-  box.innerHTML = `<form id="f" class="carte"><b>Nouvel événement</b><br><br>
-    <label>Titre<input id="t" required maxlength="120"></label><label>Slogan<input id="s" maxlength="200"></label>
-    <label>Adresse du lien (ex : pink-white)<input id="slug" pattern="[a-z0-9\\-]{2,60}" required></label>
-    <label>Date et heure de l'événement<input id="d" type="datetime-local" required></label>
-    <label>Ouverture de la billetterie<input id="o" type="datetime-local" required></label>
-    <label>Lieu<input id="v"></label><label>Dress code<input id="dc"></label>
-    <label>Couleur principale<input id="col" type="color" value="#f796cb"></label>
-    <label>Numéro T-Money pour le paiement<input id="pay" required></label>
+  const ed = editId ? (data || []).find(x => x.id === editId) : null;
+  const loc = s => (s || "").slice(0, 16);
+  const tiersTxt = (ed?.tiers || []).map(t => `${t.prix};${t.du};${t.au}`).join("\n");
+  const val = k => esc(ed?.[k] ?? "");
+  box.innerHTML = `<form id="f" class="carte"><b>${ed ? "Modifier : " + esc(ed.title) : "Nouvel événement"}</b><br><br>
+    <label>Titre<input id="t" required maxlength="120" value="${val("title")}"></label><label>Slogan<input id="s" maxlength="200" value="${val("tagline")}"></label>
+    <label>Adresse du lien (ex : pink-white)<input id="slug" pattern="[a-z0-9\\-]{2,60}" required value="${val("slug")}"></label>
+    <label>Date et heure de l'événement<input id="d" type="datetime-local" required value="${loc(ed?.starts_at)}"></label>
+    <label>Ouverture de la billetterie<input id="o" type="datetime-local" required value="${loc(ed?.sales_open)}"></label>
+    <label>Lieu<input id="v" value="${val("venue")}"></label><label>Dress code<input id="dc" value="${val("dress_code")}"></label>
+    <label>Couleur principale<input id="col" type="color" value="${esc(ed?.color || "#f796cb")}"></label>
+    <label>Numéro T-Money pour le paiement<input id="pay" required value="${val("pay_number")}"></label>
     <label>Qui peut acheter ?<select id="aud"><option value="all">Tout le monde (visiteurs, étudiants, professeurs)</option><option value="ipnet">IPNET seulement (étudiants et professeurs vérifiés)</option><option value="students">Étudiants vérifiés seulement</option></select></label>
-    <label>Nombre de places<input id="cap" type="number" min="1" value="200" required></label>
-    <label>Paliers de prix (une ligne par palier : prix;début;fin)<textarea id="tiers" rows="3" placeholder="5000;2026-11-17;2026-12-05&#10;7000;2026-12-06;2026-12-16"></textarea></label>
-    <p class="petit-texte">Heures saisies en heure de Lomé (UTC).</p><br><button class="plein">Créer l'événement</button><div id="err"></div></form>
-    <h2>Événements existants</h2>` + (data || []).map(e => `<div class="carte"><b>${esc(e.title)}</b> · ${dt(e.starts_at)}<br>
-    <span class="petit-texte">Lien : #/e/${esc(e.slug)} · ${esc(AUD[e.audience])} · ${e.capacity} places</span></div>`).join("");
+    <label>Nombre de places<input id="cap" type="number" min="1" value="${ed?.capacity ?? 200}" required></label>
+    <label>Paliers de prix (une ligne par palier : prix;début;fin)<textarea id="tiers" rows="3" placeholder="5000;2026-11-17;2026-12-05&#10;7000;2026-12-06;2026-12-16">${esc(tiersTxt)}</textarea></label>
+    <label>Fond de la page : image (JPG, PNG, WebP) ou courte vidéo (MP4, WebM, 40 Mo max)<input id="bg" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"></label>
+    ${ed?.bg_url ? `<label class="radio"><input type="checkbox" id="nobg"> Retirer le fond actuel (${ed.bg_kind === "video" ? "vidéo" : "image"})</label>` : ""}
+    <p class="petit-texte">Heures saisies en heure de Lomé (UTC). Conseil : vidéo de 10 à 20 secondes, sans son, moins de 10 Mo, pour que la page reste rapide sur téléphone.</p><br>
+    <button class="plein" id="sv">${ed ? "Enregistrer les modifications" : "Créer l'événement"}</button>
+    ${ed ? `<button type="button" id="cn">Annuler</button>` : ""}<div id="err" style="margin-top:1rem"></div></form>
+    <h2>Événements existants</h2>` + (data || []).map(e => `<div class="carte"><div class="ligne"><span><b>${esc(e.title)}</b> · ${dt(e.starts_at)}${e.active ? "" : ` <span class="badge none">Masqué</span>`}<br>
+    <span class="petit-texte">Lien : #/e/${esc(e.slug)} · ${esc(AUD[e.audience])} · ${e.capacity} places</span></span>
+    <span class="ligne g"><button class="petit" data-ed="${e.id}">Modifier</button><button class="petit" data-hide="${e.id}">${e.active ? "Masquer" : "Afficher"}</button><button class="petit danger" data-del="${e.id}">Supprimer</button></span></div></div>`).join("");
+  if (ed) $("aud").value = ed.audience;
+  const redo = () => adminEvents(box);
+  if ($("cn")) $("cn").onclick = redo;
+  box.querySelectorAll("[data-ed]").forEach(b => b.onclick = () => { adminEvents(box, b.dataset.ed); scrollTo({ top: 0 }); });
+  box.querySelectorAll("[data-hide]").forEach(b => b.onclick = async () => {
+    const e = data.find(x => x.id === b.dataset.hide);
+    const { error } = await sb.from("events").update({ active: !e.active }).eq("id", e.id);
+    if (error) return alert("Action impossible : " + error.message);
+    redo();
+  });
+  box.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const e = data.find(x => x.id === b.dataset.del);
+    const { count } = await sb.from("orders").select("id", { count: "exact", head: true }).eq("event_id", e.id);
+    const warn = count ? `\n\nATTENTION : ${count} commande(s) et leurs billets seront aussi supprimés. Pour seulement retirer l'événement du site, utilise plutôt « Masquer ».` : "";
+    if (!confirm(`Supprimer définitivement « ${e.title} » ?${warn}`)) return;
+    const { error } = await sb.from("events").delete().eq("id", e.id);
+    if (error) return alert("Suppression impossible : " + error.message);
+    redo();
+  });
   $("f").onsubmit = async ev => {
     ev.preventDefault();
+    const btn = $("sv"); btn.disabled = true;
+    const fail = m => { $("err").innerHTML = flash(m); btn.disabled = false; };
     const tiers = $("tiers").value.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const [prix, du, au] = l.split(";"); return { prix: +prix, du: (du || "").trim(), au: (au || "").trim() }; });
-    const { error } = await sb.from("events").insert({ title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, audience: $("aud").value, capacity: +$("cap").value, tiers });
-    if (error) $("err").innerHTML = flash("Création impossible : vérifie les champs (lien unique, paliers au format prix;début;fin, billetterie avant l'événement).");
-    else { confetti(); adminPage(); }
+    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, audience: $("aud").value, capacity: +$("cap").value, tiers };
+    const file = $("bg").files[0];
+    if (file) {
+      const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm" }[file.type];
+      if (!ext) return fail("Fond : format non accepté (JPG, PNG, WebP, MP4 ou WebM).");
+      if (file.size > 40 * 1024 * 1024) return fail("Fond : fichier trop lourd (40 Mo maximum).");
+      btn.textContent = "Envoi du fond…";
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const up = await sb.storage.from("event-media").upload(path, file, { contentType: file.type, upsert: false });
+      if (up.error) { btn.textContent = ed ? "Enregistrer les modifications" : "Créer l'événement"; return fail("Envoi du fond impossible : " + up.error.message); }
+      row.bg_url = sb.storage.from("event-media").getPublicUrl(path).data.publicUrl;
+      row.bg_kind = file.type.startsWith("video") ? "video" : "image";
+    } else if ($("nobg")?.checked) { row.bg_url = null; row.bg_kind = null; }
+    const { error } = ed ? await sb.from("events").update(row).eq("id", ed.id) : await sb.from("events").insert(row);
+    if (error) {
+      const m = error.message || "";
+      let why = "vérifie les champs (lien unique, paliers au format prix;début;fin, billetterie avant l'événement).";
+      if (/row-level security|permission denied/i.test(m)) why = "ton compte n'a pas le droit (il faut être administrateur avec la double authentification, puis te reconnecter).";
+      else if (/duplicate key|events_slug_key/i.test(m)) why = "ce lien existe déjà, change l'adresse du lien.";
+      else if (/events_check|sales_open/i.test(m)) why = "la billetterie doit s'ouvrir AVANT la date de l'événement.";
+      else if (/valid_tiers|tiers/i.test(m)) why = "paliers invalides. Format exact : 2000;2026-11-10;2026-11-20 (une ligne par palier, prix > 0).";
+      else if (/slug/i.test(m)) why = "lien invalide : minuscules, chiffres et tirets seulement (ex : soiree-amapiano).";
+      else if (/bg_/i.test(m)) why = "la base n'est pas à jour : lance d'abord le fichier migration_fond.sql dans Supabase.";
+      return fail((ed ? "Modification" : "Création") + " impossible : " + why + " [" + m + "]");
+    }
+    btn.disabled = false; confetti(); redo();
   };
 }
 
