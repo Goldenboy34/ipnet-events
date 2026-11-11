@@ -147,6 +147,7 @@ async function route() {
   const my = ++rid;
   clearTimeout(ldTimer); ldTimer = setTimeout(() => { if (my === rid) app.innerHTML = LOADER; }, 400);
   clearInterval(timer); clearTimeout(bgTimer); stopIdle(); stopCam();
+  if (!location.hash.startsWith("#/admin")) watchOrders(false);
   document.querySelectorAll(".cta-fixe").forEach(b => b.remove()); if (ctaIO) { ctaIO.disconnect(); ctaIO = null; }
   document.documentElement.style.setProperty("--c", "#ff6fae");
   document.title = SITE_NAME;
@@ -168,7 +169,7 @@ async function route() {
 
   const grand = document.documentElement.hasAttribute("data-big");
   $("nav").innerHTML = `<b><a href="#/" class="marque">${logo()}<span>${esc(SITE_NAME)}</span></a></b><span>` +
-    (me ? `<a href="#/me">Mes billets</a>${profile?.role === "admin" ? `<a href="#/admin">Admin</a>` : ""}<a href="#" id="out">Déconnexion</a>`
+    (me ? `<a href="#/me">Mes billets</a>${profile?.role === "admin" ? `<a href="#/admin">Admin</a>` : profile?.role === "controller" ? `<a href="#/scan">Contrôle</a>` : ""}<a href="#" id="out">Déconnexion</a>`
         : `<a href="#/login">Connexion</a>`) + `<button type="button" class="icone" id="gt" aria-label="Agrandir le texte" aria-pressed="${grand}" title="Texte plus grand">A+</button></span>`;
   $("gt").onclick = () => { const on = !document.documentElement.hasAttribute("data-big"); if (on) document.documentElement.setAttribute("data-big", "1"); else document.documentElement.removeAttribute("data-big"); try { localStorage.setItem("big", on ? "1" : "0"); } catch {} $("gt").setAttribute("aria-pressed", on); };
   document.querySelectorAll('#nav a[href^="#/"]').forEach(l => l.addEventListener("click", () => { if (l.getAttribute("href") === location.hash) route(); }));
@@ -185,6 +186,12 @@ async function route() {
     if (!me) { afterLogin = location.hash; return ticketPage(b); }
     if (profile?.role === "admin" && !aal2) { afterLogin = location.hash; location.hash = "#/mfa"; return; }
     return ticketPage(b);
+  }
+  if (a === "scan") {
+    if (!me) { afterLogin = "#/scan"; location.hash = "#/login"; return; }
+    if (profile?.role === "admin" && !aal2) { afterLogin = "#/scan"; location.hash = "#/mfa"; return; }
+    if (!["admin", "controller"].includes(profile?.role)) { location.hash = "#/"; return; }
+    return controlPage();
   }
   if (a === "admin") {
     if (!me) { location.hash = "#/login"; return; }
@@ -272,6 +279,16 @@ function eligible(e, p) {
 const genCode = () => "IPN-" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, "0");
 
 /* Galerie d'ambiance : les images et vidéos de fond de l'événement */
+function faq(e) {
+  const q = [
+    ["Comment payer ?", `Tu paies par Mixx by Yas au numéro affiché dans le formulaire (${esc(e.pay_number || "indiqué à l'achat")}). Tu notes ensuite la référence de la transaction et tu envoies une capture d'écran du paiement.`],
+    ["Quand est-ce que je reçois mon billet ?", "Dès que l'équipe a vérifié ton paiement. Tu suis l'avancement dans « Mes billets » : commande envoyée, vérification, billet prêt."],
+    ["Mon paiement n'est pas validé, que faire ?", "Vérifie que le montant, la référence et la capture sont corrects. Une commande refusée peut être refaite avec une capture plus claire."],
+    ["Comment entrer à l'événement ?", "Présente le QR code de ton billet (sur ton téléphone ou téléchargé). Chaque billet n'est valable qu'une seule fois."],
+    ["Puis-je acheter pour mes amis ?", "Oui : choisis le nombre de billets, puis écris le nom de chaque personne sur son billet dans « Mes billets ». Tu peux aussi lui envoyer son billet."]
+  ];
+  return `<h2 class="rv">Questions fréquentes</h2><div class="faq rv">` + q.map(([a, b]) => `<details><summary>${a}</summary><p>${b}</p></details>`).join("") + `</div>`;
+}
 function galerie(e) {
   const ok = u => typeof u === "string" && /^https:\/\/[a-z0-9-]+\.supabase\.co\//.test(u);
   const items = (Array.isArray(e.gallery) ? e.gallery : []).filter(m => m && ok(m.url)).slice(0, 12);
@@ -301,22 +318,32 @@ async function eventPage(slug, others) {
   document.title = e.title;
   const { data: left } = await sb.rpc("places_restantes", { p_event: e.id });
   const tiers = e.tiers || [];
+  const passe = () => Date.now() >= Date.parse(e.starts_at);
   const ouvert = () => Date.now() >= Date.parse(e.sales_open), fini = () => Date.now() >= Date.parse(e.sales_close || e.starts_at);
   const parts = [["j", "jours"], ["h", "heures"], ["m", "min"], ["s", "sec"]];
 
   show(`<div class="hero"><div class="wrap">${e.tagline ? `<p class="pill">${esc(e.tagline)}</p>` : ""}
     <h1>${esc(e.title)}</h1><p id="phrase" class="phrase"></p>
-    <div class="compte">${parts.map(([k, l]) => `<div><b id="cp-${k}">0</b>${l}</div>`).join("")}</div><p class="quand">${dt(e.starts_at)}</p></div></div>
+    <div class="compte"${passe() ? " hidden" : ""}>${parts.map(([k, l]) => `<div><b id="cp-${k}">0</b>${l}</div>`).join("")}</div><p class="quand">${dt(e.starts_at)}</p>
+    ${passe() ? `<div class="merci"><b>Merci d'être venu !</b><p>L'événement est terminé. On espère que tu t'es bien amusé.</p><div id="suite"></div></div>`
+      : `<a class="btn plein grand" id="herocta" href="#achat" hidden>Réserver ma place</a>`}</div></div>
     <div class="wrap"><dl class="infos rv"><div><dt>Lieu</dt><dd>${esc(e.venue || "Bientôt annoncé")}</dd></div>
     ${e.dress_code ? `<div><dt>Dress code</dt><dd>${esc(e.dress_code)}</dd></div>` : ""}
     <div><dt>Accès</dt><dd>${esc(AUD[e.audience])}</dd></div>
     <div><dt>Places restantes</dt><dd>${left == null ? "—" : Math.max(0, left)}</dd></div></dl>
     <div class="actions-ev rv"><button type="button" id="ics">📅 Ajouter à mon agenda</button><button type="button" id="share">↗ Partager</button></div>
     ${galerie(e)}
-    <h2 class="rv">Les tarifs</h2><div id="paliers" class="rv"></div>
-    <h2 class="rv">Acheter un billet</h2><div id="achat" class="rv"></div>
+    ${passe() ? "" : `<h2 class="rv">Les tarifs</h2>`}<div id="paliers" class="rv"${passe() ? " hidden" : ""}></div>
+    ${passe() ? "" : `<h2 class="rv">Acheter un billet</h2>`}<div id="achat" class="rv"${passe() ? " hidden" : ""}></div>
+    ${passe() ? "" : faq(e)}
     ${others?.length ? `<h2 class="rv">Autres événements</h2>` + others.map(o => `<a class="carte ev rv" style="--ec:${esc(o.color)}" href="#/e/${esc(o.slug)}"><b>${esc(o.title)}</b><br>${dt(o.starts_at)} · ${esc(o.venue || "Lieu bientôt annoncé")}</a>`).join("") : ""}</div>`);
 
+  if (passe()) {
+    $("ics").hidden = true;
+    sb.from("events").select("slug,title,starts_at").eq("active", true).gt("starts_at", new Date().toISOString()).order("starts_at").limit(1).then(({ data: nx }) => {
+      if ($("suite")) $("suite").innerHTML = nx?.[0] ? `<a class="btn plein" href="#/e/${esc(nx[0].slug)}">Prochain événement : ${esc(nx[0].title)}</a>` : `<p class="petit-texte">Le prochain événement sera annoncé bientôt.</p>`;
+    });
+  }
   $("ics").onclick = () => addToCalendar(e);
   $("share").onclick = () => shareEvent(e);
   if (others && welcome) splash(e);
@@ -332,7 +359,7 @@ async function eventPage(slug, others) {
       if (prev[k] !== t) { el.textContent = t; prev[k] = t; if (!REDUCE) { el.classList.remove("flip"); void el.offsetWidth; el.classList.add("flip"); } }
     });
     const p = palierActuel(tiers);
-    $("phrase").textContent = fini() ? "La billetterie est fermée." : ouvert() ? (p ? `Billetterie ouverte · Tarif actuel : ${fmt(p.prix)}. Fin de la billetterie dans :` : "Billetterie ouverte, mais aucun tarif n'est actif aujourd'hui. Fin de la billetterie dans :") : "Ouverture de la billetterie dans :";
+    $("phrase").textContent = passe() ? "Événement terminé" : fini() ? "La billetterie est fermée." : ouvert() ? (p ? `Billetterie ouverte · Tarif actuel : ${fmt(p.prix)}. Fin de la billetterie dans :` : "Billetterie ouverte, mais aucun tarif n'est actif aujourd'hui. Fin de la billetterie dans :") : "Ouverture de la billetterie dans :";
     if (p !== lastP || lastP === undefined) {
       lastP = p;
       $("paliers").innerHTML = tiers.map((t, i) => `<div class="palier ${t === p ? "actif" : Date.now() > Date.parse(t.au + "T23:59:59Z") ? "passe" : ""}"><span>${i ? "Ensuite" : "Ouverture"} · ${esc(t.du)} → ${esc(t.au)}</span><b>${fmt(t.prix)}</b></div>`).join("");
@@ -405,9 +432,14 @@ async function eventPage(slug, others) {
   const cta = document.createElement("button"); cta.type = "button"; cta.className = "cta-fixe plein"; cta.textContent = "Réserver ma place";
   document.body.appendChild(cta);
   let vue = false;
-  const majCta = () => cta.classList.toggle("on", ouvert() && !fini() && !vue);
+  const majCta = () => { cta.classList.toggle("on", ouvert() && !fini() && !vue); if ($("herocta")) $("herocta").hidden = !(ouvert() && !fini()); };
+  if ($("herocta")) $("herocta").onclick = ev => { ev.preventDefault(); cta.click(); };
   cta.onclick = () => $("achat").scrollIntoView({ behavior: REDUCE ? "auto" : "smooth", block: "start" });
-  if ("IntersectionObserver" in window) { ctaIO = new IntersectionObserver(en => { vue = en[0].isIntersecting; majCta(); }, { rootMargin: "0px 0px -15% 0px" }); ctaIO.observe($("achat")); }
+  if ("IntersectionObserver" in window) {
+    const vus = new Set();
+    ctaIO = new IntersectionObserver(en => { en.forEach(x => x.isIntersecting ? vus.add(x.target.id) : vus.delete(x.target.id)); vue = vus.size > 0; majCta(); }, { rootMargin: "0px 0px -15% 0px" });
+    ctaIO.observe($("achat")); if ($("herocta")) ctaIO.observe($("herocta"));
+  }
   const tick1 = tick; tick = function () { tick1(); majCta(); };
   clearInterval(timer); timer = setInterval(tick, 1000); majCta();
 }
@@ -556,36 +588,126 @@ async function mfaPage() {
 }
 
 /* Billet téléchargeable : image PNG avec l'événement, le nom du titulaire et le QR code */
+const loadFonts = async () => { try { await document.fonts.load("800 40px Sora"); await document.fonts.load("700 40px Sora"); await document.fonts.load("500 28px 'DM Sans'"); await document.fonts.load("700 28px 'DM Sans'"); } catch { /* polices non chargées */ } };
+const roundRect = (x, px, py, w, h, r) => { x.beginPath(); if (x.roundRect) x.roundRect(px, py, w, h, r); else x.rect(px, py, w, h); };
+const mixHex = (hex, t) => { const n = parseInt(String(hex).replace("#", "").padEnd(6, "0").slice(0, 6), 16) || 0xff6fae; return [n >> 16 & 255, n >> 8 & 255, n & 255].map(v => Math.round(v * t)); };
+function wrapLines(x, text, maxW, maxLines) {
+  const words = String(text).split(/\s+/), lines = []; let cur = "";
+  for (const w of words) { const t = cur ? cur + " " + w : w; if (x.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, "") + "…"; }
+  return lines;
+}
+/* Billet en image : même forme qu'un vrai billet (encoches, pointillés, talon avec QR) */
+async function ticketBlob(d, holder) {
+  await loadFonts();
+  const W = 1500, H = 620, SX = 1010, col = (d.color || "#ff6fae"), c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  // forme : rectangle arrondi avec une encoche ronde en haut et en bas de la ligne de découpe
+  const R = 44, N = 34, p = new Path2D(); p.roundRect ? p.roundRect(0, 0, W, H, R) : p.rect(0, 0, W, H);
+  p.moveTo(SX + N, 0); p.arc(SX, 0, N, 0, Math.PI * 2); p.moveTo(SX + N, H); p.arc(SX, H, N, 0, Math.PI * 2);
+  x.save(); x.clip(p, "evenodd");
+  // partie principale
+  const g = x.createLinearGradient(0, 0, SX, H); g.addColorStop(0, "#150f3d"); g.addColorStop(1, "#0a0820"); x.fillStyle = g; x.fillRect(0, 0, SX, H);
+  const gl = x.createRadialGradient(80, 60, 10, 80, 60, 700); const [cr, cg, cb] = mixHex(col, 1); gl.addColorStop(0, `rgba(${cr},${cg},${cb},.45)`); gl.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gl; x.fillRect(0, 0, SX, H);
+  const g2 = x.createRadialGradient(SX, H, 10, SX, H, 520); g2.addColorStop(0, "rgba(124,92,255,.35)"); g2.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g2; x.fillRect(0, 0, SX, H);
+  x.fillStyle = col; x.fillRect(0, 0, 18, H);
+  // talon
+  const gs = x.createLinearGradient(SX, 0, W, H); gs.addColorStop(0, "#2a1d5c"); gs.addColorStop(1, "#1b1250"); x.fillStyle = gs; x.fillRect(SX, 0, W - SX, H);
+  x.restore();
+  // textes
+  x.textAlign = "left"; x.textBaseline = "alphabetic"; x.fillStyle = col; x.font = "800 26px 'DM Sans', sans-serif";
+  if (x.letterSpacing !== undefined) x.letterSpacing = "6px"; x.fillText("IPNET EVENTS  ·  BILLET", 70, 88); if (x.letterSpacing !== undefined) x.letterSpacing = "0px";
+  x.fillStyle = "#ffffff"; let size = 84, lines;
+  do { x.font = `800 ${size}px 'Sora', sans-serif`; lines = wrapLines(x, d.ev, SX - 130, 2); size -= 4; } while (lines.some(l => x.measureText(l).width > SX - 130) && size > 40);
+  lines.forEach((l, i) => x.fillText(l, 70, 190 + i * (size + 22)));
+  const yy = 190 + (lines.length - 1) * (size + 22) + 70;
+  x.font = "500 33px 'DM Sans', sans-serif"; x.fillStyle = "#d8d3f7"; x.fillText(dt(d.when), 70, yy);
+  if (d.venue) { x.fillStyle = "#b8b3dd"; x.fillText(d.venue, 70, yy + 48); }
+  x.fillStyle = "#8f89bd"; x.font = "700 22px 'DM Sans', sans-serif"; if (x.letterSpacing !== undefined) x.letterSpacing = "4px"; x.fillText("PORTEUR DU BILLET", 70, H - 118); if (x.letterSpacing !== undefined) x.letterSpacing = "0px";
+  x.fillStyle = "#ffffff"; let ns = 54; do { x.font = `800 ${ns}px 'Sora', sans-serif`; ns -= 2; } while (x.measureText(holder).width > SX - 150 && ns > 24); x.fillText(holder, 70, H - 56);
+  // ligne de découpe
+  x.save(); x.strokeStyle = "rgba(255,255,255,.4)"; x.lineWidth = 3; x.setLineDash([12, 12]); x.beginPath(); x.moveTo(SX, N + 12); x.lineTo(SX, H - N - 12); x.stroke(); x.restore();
+  // QR dans le talon
+  const qr = new Image(); qr.src = await QRCode.toDataURL(ticketUrl(d.dl), { width: 520, margin: 2, errorCorrectionLevel: "L" }); await qr.decode();
+  const q = 360, qx = SX + (W - SX - q) / 2, qy = 70;
+  x.fillStyle = "#ffffff"; roundRect(x, qx - 18, qy - 18, q + 36, q + 36, 26); x.fill(); x.drawImage(qr, qx, qy, q, q);
+  x.textAlign = "center"; x.fillStyle = col; x.font = "700 27px ui-monospace, monospace"; x.fillText(d.dl, SX + (W - SX) / 2, qy + q + 78);
+  x.fillStyle = "#b8b3dd"; x.font = "500 22px 'DM Sans', sans-serif"; x.fillText("1 personne · valable une seule fois", SX + (W - SX) / 2, qy + q + 114);
+  x.fillText("Présente ce QR à l'entrée", SX + (W - SX) / 2, qy + q + 144);
+  return await new Promise(res => c.toBlob(res, "image/png"));
+}
 async function downloadTicket(d, holder) {
   try {
-    try { await document.fonts.load("700 40px Sora"); await document.fonts.load("500 28px 'DM Sans'"); } catch { /* polices non chargées */ }
-    const W = 720, H = 1040, c = document.createElement("canvas"); c.width = W; c.height = H;
-    const x = c.getContext("2d"), col = getComputedStyle(document.documentElement).getPropertyValue("--c").trim() || "#ff6fae";
-    const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#0a0820"); g.addColorStop(1, "#2a1d5c"); x.fillStyle = g; x.fillRect(0, 0, W, H);
-    x.fillStyle = col; x.fillRect(0, 0, W, 14);
-    x.textAlign = "center"; x.fillStyle = "#ffffff";
-    const fit = (t, size, max) => { do { x.font = `700 ${size}px 'Sora', sans-serif`; size -= 2; } while (x.measureText(t).width > max && size > 20); };
-    fit(d.ev, 54, W - 80); x.fillText(d.ev, W / 2, 130);
-    x.font = "500 28px 'DM Sans', sans-serif"; x.fillStyle = "#cdc7f0";
-    x.fillText(dt(d.when), W / 2, 190); if (d.venue) x.fillText(d.venue, W / 2, 232);
-    const qr = new Image(); qr.src = await QRCode.toDataURL(ticketUrl(d.dl), { width: 520, margin: 2, errorCorrectionLevel: "L" }); await qr.decode();
-    x.fillStyle = "#ffffff"; x.beginPath(); if (x.roundRect) x.roundRect(80, 290, 560, 560, 28); else x.rect(80, 290, 560, 560); x.fill(); x.drawImage(qr, 100, 310, 520, 520);
-    x.fillStyle = "#ffffff"; x.font = "700 36px 'DM Sans', sans-serif"; x.fillText(holder, W / 2, 915);
-    x.font = "700 30px monospace"; x.fillStyle = col; x.fillText(d.dl, W / 2, 965);
-    x.font = "400 22px 'DM Sans', sans-serif"; x.fillStyle = "#b8b3dd"; x.fillText("1 billet · valable une seule fois · présente ce QR à l'entrée", W / 2, 1006);
-    const blob = await new Promise(r => c.toBlob(r, "image/png"));
+    const blob = await ticketBlob(d, holder);
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `billet-${d.dl}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   } catch { alert("Téléchargement impossible. Fais plutôt une capture d'écran du billet."); }
+}
+/* Envoyer le billet à un ami (feuille de partage du téléphone, WhatsApp compris) */
+async function sendTicket(d, holder) {
+  try {
+    const blob = await ticketBlob(d, holder), file = new File([blob], `billet-${d.dl}.png`, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: d.ev, text: `Ton billet pour ${d.ev}` }); return; }
+    downloadTicket(d, holder); alert("Ce navigateur ne peut pas partager directement : le billet est téléchargé, envoie-le à ton ami.");
+  } catch (e) { if (e && e.name === "AbortError") return; alert("Envoi impossible. Télécharge le billet puis envoie-le toi-même."); }
+}
+/* Affiche « J'y serai » à poster en statut */
+async function posterBlob(ev, name) {
+  await loadFonts();
+  const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d"), col = ev.color || "#ff6fae";
+  const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#150f3d"); g.addColorStop(1, "#0a0820"); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  const [cr, cg, cb] = mixHex(col, 1);
+  [[200, 300, 900, .55], [W - 100, 1100, 800, .35], [300, H - 100, 900, .4]].forEach(([px, py, rad, al], i) => { const r = x.createRadialGradient(px, py, 10, px, py, rad); r.addColorStop(0, i === 1 ? `rgba(124,92,255,${al})` : `rgba(${cr},${cg},${cb},${al})`); r.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = r; x.fillRect(0, 0, W, H); });
+  try { const lg = new Image(); lg.src = "logo.svg"; await lg.decode(); x.drawImage(lg, W / 2 - 90, 150, 180, 180); } catch {}
+  x.textAlign = "center"; x.fillStyle = "#d8d3f7"; x.font = "700 34px 'DM Sans', sans-serif"; if (x.letterSpacing !== undefined) x.letterSpacing = "8px"; x.fillText("IPNET EVENTS", W / 2, 420); if (x.letterSpacing !== undefined) x.letterSpacing = "0px";
+  const gt = x.createLinearGradient(0, 520, 0, 760); gt.addColorStop(0, "#ffffff"); gt.addColorStop(1, col); x.fillStyle = gt;
+  x.font = "800 190px 'Sora', sans-serif"; x.fillText("J'Y", W / 2, 640); x.fillText("SERAI", W / 2, 830);
+  x.fillStyle = "#ffffff"; let ns = 70; do { x.font = `800 ${ns}px 'Sora', sans-serif`; ns -= 2; } while (x.measureText(name).width > W - 200 && ns > 30);
+  roundRect(x, 90, 930, W - 180, 150, 75); x.fillStyle = "rgba(255,255,255,.12)"; x.fill(); x.strokeStyle = "rgba(255,255,255,.3)"; x.lineWidth = 3; x.stroke();
+  x.fillStyle = "#ffffff"; x.fillText(name, W / 2, 1030);
+  x.font = "800 80px 'Sora', sans-serif"; let ts = 80; do { x.font = `800 ${ts}px 'Sora', sans-serif`; ts -= 2; } while (x.measureText(ev.title).width > W - 160 && ts > 34);
+  x.fillStyle = col; x.fillText(ev.title, W / 2, 1260);
+  x.fillStyle = "#ffffff"; x.font = "500 44px 'DM Sans', sans-serif"; x.fillText(dt(ev.starts_at), W / 2, 1350);
+  if (ev.venue) { x.fillStyle = "#d8d3f7"; x.fillText(ev.venue, W / 2, 1420); }
+  roundRect(x, 190, 1560, W - 380, 120, 60); x.fillStyle = col; x.fill();
+  x.fillStyle = "#1a0b22"; x.font = "800 44px 'Sora', sans-serif"; x.fillText("Réserve ton billet", W / 2, 1635);
+  x.fillStyle = "#b8b3dd"; x.font = "500 32px 'DM Sans', sans-serif"; x.fillText(baseUrl().replace(/^https?:\/\//, ""), W / 2, 1760);
+  return await new Promise(res => c.toBlob(res, "image/png"));
+}
+async function sharePoster(ev, name) {
+  try {
+    const blob = await posterBlob(ev, name), file = new File([blob], "jy-serai.png", { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: ev.title, text: `J'y serai ! ${ev.title}\n${baseUrl()}#/e/${ev.slug || ""}` }); return; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "jy-serai.png"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e) { if (e && e.name === "AbortError") return; alert("Impossible de créer l'affiche. Réessaie."); }
 }
 
 /* ---------- Dashboard utilisateur ---------- */
 function ticketCard(t, o) {
-  const ev = o.events || {};
+  const ev = o.events || {}, porteur = t.holder_name || profile?.full_name || "";
+  const dat = `data-dl="${esc(t.code)}" data-ev="${esc(ev.title)}" data-when="${esc(ev.starts_at)}" data-venue="${esc(ev.venue || "")}" data-color="${esc(ev.color || "")}" data-tid="${esc(t.id || "")}"`;
   return `<div class="tk ${esc(t.status)}"><div class="tk-main"><span class="tk-ev">${esc(ev.title)}</span><span class="tk-date">${dt(ev.starts_at)}</span>${ev.venue ? `<span class="tk-lieu">${esc(ev.venue)}</span>` : ""}
-    <span class="tk-code">${esc(t.code)}</span><span class="badge ${esc(t.status)}">${BILLET[t.status] || esc(t.status)}</span>${t.status === "used" && t.used_at ? `<span class="petit-texte">Entrée le ${dts(t.used_at)}</span>` : ""}</div>
+    ${porteur ? `<span class="tk-nom">Porteur : <b>${esc(porteur)}</b></span>` : ""}
+    <span class="tk-code">${esc(t.code)}</span><span class="badge ${esc(t.status)}">${BILLET[t.status] || esc(t.status)}</span>${t.status === "used" && t.used_at ? `<span class="petit-texte">Entrée le ${dts(t.used_at)}</span>` : ""}
+    ${t.status === "valid" && t.id ? `<label class="nom">Nom sur le billet (pour un ami, par exemple)<input data-nm="${esc(t.id)}" maxlength="60" value="${esc(t.holder_name || "")}" placeholder="${esc(profile?.full_name || "Ton nom")}" autocomplete="off"></label><span class="petit-texte" data-nmst="${esc(t.id)}"></span>` : ""}</div>
     <div class="tk-sep"></div><div class="tk-qr">${t.status === "valid"
-      ? `<div class="qr"><img alt="QR code du billet" width="170" height="170" data-qr="${esc(ticketUrl(t.code))}"></div><button class="petit" data-dl="${esc(t.code)}" data-ev="${esc(ev.title)}" data-when="${esc(ev.starts_at)}" data-venue="${esc(ev.venue || "")}">Télécharger</button>`
+      ? `<div class="qr"><img alt="QR code du billet" width="170" height="170" data-qr="${esc(ticketUrl(t.code))}"></div><div class="ligne g" style="justify-content:center"><button class="petit" ${dat}>Télécharger</button><button class="petit" data-send ${dat}>Envoyer</button></div>`
       : `<p class="vide">${t.status === "used" ? "Ce billet a déjà servi." : "Ce billet est annulé."}</p>`}</div></div>`;
+}
+/* Suivi d'une commande : envoyée, vérifiée, billet prêt */
+function suivi(o) {
+  const refus = o.status === "rejected", att = o.status === "pending", ok = o.status === "confirmed";
+  const steps = [["Commande envoyée", "fait"], [refus ? "Paiement refusé" : att ? "Vérification en cours" : "Paiement vérifié", refus ? "ko" : att ? "cours" : "fait"], ["Billet prêt", ok ? "fait" : "attente"]];
+  return `<ol class="suivi" aria-label="Suivi de la commande">${steps.map(([l, c]) => `<li class="${c}"><i></i><span>${l}</span></li>`).join("")}</ol>`;
+}
+function rappel(data) {
+  const now = Date.now(), vus = new Set(), out = [];
+  (data || []).forEach(o => { const e = o.events; if (!e || o.status !== "confirmed" || vus.has(e.title + e.starts_at)) return;
+    if (!(o.tickets || []).some(t => t.status === "valid")) return;
+    const dd = Date.parse(e.starts_at) - now; if (dd <= 0 || dd > 36 * 36e5) return; vus.add(e.title + e.starts_at);
+    const jour = new Date(e.starts_at).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10) ? "aujourd'hui" : "demain";
+    out.push(`<div class="rappel"><b>Rappel</b> · ${esc(e.title)} a lieu ${jour} à ${new Date(e.starts_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}${e.venue ? " · " + esc(e.venue) : ""}${e.dress_code ? ` · Dress code : ${esc(e.dress_code)}` : ""}. Garde ton billet à portée de main.</div>`); });
+  return out.join("");
 }
 /* Copie des billets valides sur l'appareil, pour les afficher sans connexion à l'entrée */
 const SAVED = "billets-hors-ligne";
@@ -594,32 +716,42 @@ const forgetTickets = () => { try { localStorage.removeItem(SAVED); } catch {} }
 const savedTickets = () => { try { return JSON.parse(localStorage.getItem(SAVED) || "[]"); } catch { return []; } };
 async function mePage() {
   if (!me) { location.hash = "#/login"; return; }
-  const { data, error: errO } = await sb.from("orders").select("*, events(title,starts_at,venue), tickets(id,code,status,used_at)").eq("user_id", me.id).order("created_at", { ascending: false });
+  const { data, error: errO } = await sb.from("orders").select("*, events(title,starts_at,venue,color,slug,dress_code), tickets(id,code,status,used_at,holder_name)").eq("user_id", me.id).order("created_at", { ascending: false });
   const p = profile || {};
   if (errO && !data) {
     const sv = savedTickets().filter(t => t.uid === me.id);
     if (sv.length) {
       show(`<div class="wrap"><h1 class="mini">Mes billets</h1><br>${flash("Pas de connexion : voici tes billets enregistrés sur cet appareil.")}<div class="tks">` +
-        sv.map(t => ticketCard({ code: t.code, status: "valid" }, { events: { title: t.title, starts_at: t.when, venue: t.venue } })).join("") + `</div></div>`);
+        sv.map(t => ticketCard({ code: t.code, status: "valid", holder_name: t.name }, { events: { title: t.title, starts_at: t.when, venue: t.venue, color: t.color } })).join("") + `</div></div>`);
       document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch {} });
+      document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => (btn.hasAttribute("data-send") ? sendTicket : downloadTicket)(btn.dataset, sv.find(t => t.code === btn.dataset.dl)?.name || profile?.full_name || ""));
       return;
     }
   }
-  if (!errO && data) saveTickets(data.flatMap(o => (o.tickets || []).filter(t => t.status === "valid").map(t => ({ uid: me.id, code: t.code, title: o.events?.title, when: o.events?.starts_at, venue: o.events?.venue }))));
+  if (!errO && data) saveTickets(data.flatMap(o => (o.tickets || []).filter(t => t.status === "valid").map(t => ({ uid: me.id, code: t.code, name: t.holder_name || "", color: o.events?.color, title: o.events?.title, when: o.events?.starts_at, venue: o.events?.venue }))));
   const n = notice; notice = "";
   show(`<div class="wrap"><h1 class="mini">Bonjour ${esc(p.first_name || "")}</h1><br>${n ? flash(n, true) : ""}
     <div class="carte"><div class="ligne"><span><b>${esc(p.full_name || "")}</b> · ${esc(TYPES[p.account_type] || "")}</span></div>
       ${p.blocked ? flash("Ton compte est bloqué. Contacte un administrateur.") : ""}
       <div class="ligne g" style="margin-top:.8rem"><button class="petit" id="all">Me déconnecter partout</button></div></div>
-    <h2>Mes commandes et mes billets</h2>${errO ? flash("Impossible de charger tes commandes : " + (errO.message || "erreur")) : ""}` +
+    ${rappel(data)}<h2>Mes commandes et mes billets</h2>${errO ? flash("Impossible de charger tes commandes : " + (errO.message || "erreur")) : ""}` +
     (data?.length ? data.map(o => `<div class="carte rv"><div class="ligne"><b>${esc(o.events.title)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
       <p>${o.qty} billet(s) · ${fmt(o.total)} · ${dt(o.events.starts_at)}<br><span class="petit-texte">Commandé le ${dts(o.created_at)} · Code de commande ${esc(o.order_code)} · Référence ${esc(o.reference || "—")}</span></p>
+      ${suivi(o)}
       ${o.status === "confirmed" ? `<div class="tks">${(o.tickets || []).map(t => ticketCard(t, o)).join("")}</div>
-        <p class="petit-texte" style="margin-top:.6rem">Un QR code par billet : il s'ouvre avec l'appareil photo du contrôleur et n'est valable qu'une seule fois.</p>` : ""}
+        <p class="petit-texte" style="margin-top:.6rem">Un QR code par billet : il s'ouvre avec l'appareil photo du contrôleur et n'est valable qu'une seule fois.</p>
+        <div class="ligne g" style="margin-top:.6rem"><button class="petit" data-aff="${o.id}">Créer mon affiche « J'y serai »</button></div>` : ""}
       ${o.status === "rejected" ? `<p>Paiement non reconnu. Vérifie le montant et recommence avec une capture claire.</p>` : ""}</div>`).join("")
       : `<p>Tu n'as pas encore de commande. <a href="#/">Voir les événements</a></p>`) + `</div>`);
   document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch (e) { i.replaceWith(document.createTextNode("QR indisponible : donne le code ci-dessous à l'entrée.")); } });
-  document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => downloadTicket(btn.dataset, p.full_name || ""));
+  const nomDe = d => (d.tid && document.querySelector(`[data-nm="${CSS.escape(d.tid)}"]`)?.value.trim()) || p.full_name || "";
+  document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => (btn.hasAttribute("data-send") ? sendTicket : downloadTicket)(btn.dataset, nomDe(btn.dataset)));
+  document.querySelectorAll("[data-nm]").forEach(inp => inp.onchange = async () => {
+    const st = document.querySelector(`[data-nmst="${CSS.escape(inp.dataset.nm)}"]`); if (st) st.textContent = "Enregistrement…";
+    const r = await rpc("set_ticket_name", { p_ticket: inp.dataset.nm, p_name: inp.value });
+    if (st) st.textContent = r.error ? r.error : "Nom enregistré ✓";
+  });
+  document.querySelectorAll("[data-aff]").forEach(btn => btn.onclick = () => { const o = (data || []).find(x => x.id === btn.dataset.aff); if (o) sharePoster(o.events, p.full_name || ""); });
   $("all").onclick = async () => { forgetTickets(); await sb.auth.signOut({ scope: "global" }); location.hash = "#/login"; };
   const zd = document.createElement("div"); zd.className = "wrap"; zd.style.marginTop = "0";
   zd.innerHTML = `<h2>Mes données</h2><div class="carte"><p class="petit-texte" style="margin-bottom:.8rem">Tu peux télécharger une copie de tes données, ou supprimer définitivement ton compte avec tes commandes, tes billets et tes captures de paiement. Les billets non utilisés ne seront plus valables.</p>
@@ -666,7 +798,7 @@ function download(name, rows) {
 const sansAccent = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
 
 async function adminPage() {
-  clearInterval(timer); startIdle();
+  clearInterval(timer); startIdle(); watchOrders(true);
   const onglets = [["orders", "Commandes"], ["events", "Événements"], ["accounts", "Comptes"], ["scan", "Contrôle d'entrée"], ["recon", "Rapprochement"], ["log", "Alertes et journal"], ["stats", "Statistiques"], ["reset", "Réinitialiser"]];
   show(`<div class="wrap"><h1 class="mini">Administration</h1><br><div class="onglets">` +
     onglets.map(o => `<button class="${tab === o[0] ? "on" : ""}" data-t="${o[0]}">${o[1]}</button>`).join("") + `</div><div id="panel"></div></div>`);
@@ -674,25 +806,62 @@ async function adminPage() {
   ({ orders: adminOrders, events: adminEvents, accounts: adminAccounts, scan: adminScan, recon: adminRecon, log: adminLog, stats: adminStats, reset: adminReset })[tab]($("panel"));
 }
 
+/* Page du contrôleur : uniquement le scanner */
+function controlPage() {
+  startIdle();
+  show(`<div class="wrap"><h1 class="mini">Contrôle d'entrée</h1><br><div id="panel"></div></div>`);
+  adminScan($("panel"));
+}
+
 async function adminOrders(box) {
-  const { data: all, error: oerr } = await sb.from("orders").select("*, events(title), profiles!orders_user_id_fkey(full_name,phone,account_type), tickets(id,code,status)").order("created_at", { ascending: false }).limit(300);
+  const [{ data: all, error: oerr }, { data: evs }] = await Promise.all([
+    sb.from("orders").select("*, events(title), profiles!orders_user_id_fkey(full_name,phone,account_type), tickets(id,code,status,used_at)").order("created_at", { ascending: false }).limit(2000),
+    sb.from("events").select("id,title,capacity,starts_at,active").order("starts_at", { ascending: false })
+  ]);
   if (oerr) { box.innerHTML = flash("Impossible de charger les commandes : " + oerr.message); return; }
   const data = all || [], ok = data.filter(o => o.status === "confirmed");
-  const list = ofilter === "all" ? data : data.filter(o => o.status === ofilter);
-  box.innerHTML = `<div class="stats"><div><b>${data.filter(o => o.status === "pending").length}</b>à valider</div>
-    <div><b>${ok.reduce((n, o) => n + o.qty, 0)}</b>billets confirmés</div><div><b>${fmt(ok.reduce((n, o) => n + o.total, 0))}</b>encaissé</div></div>
+  const list = (ofilter === "all" ? data : data.filter(o => o.status === ofilter)).slice(0, 100);
+  const vente = (evs || []).filter(e => e.active).map(e => {
+    const co = data.filter(o => o.event_id === e.id);
+    const conf = co.filter(o => o.status === "confirmed"), att = co.filter(o => o.status === "pending");
+    const nb = conf.reduce((n, o) => n + o.qty, 0), na = att.reduce((n, o) => n + o.qty, 0);
+    return { e, nb, na, cash: conf.reduce((n, o) => n + o.total, 0), pct: Math.min(100, Math.round((nb + na) / Math.max(1, e.capacity) * 100)) };
+  });
+  const notifOk = "Notification" in window && Notification.permission === "granted";
+  box.innerHTML = `<div class="stats"><div><b class="cu" data-n="${data.filter(o => o.status === "pending").length}">0</b>à valider</div>
+    <div><b class="cu" data-n="${ok.reduce((n, o) => n + o.qty, 0)}">0</b>billets confirmés</div><div><b class="cu" data-n="${ok.reduce((n, o) => n + o.total, 0)}" data-f="fcfa">0</b>encaissé</div></div>` +
+    vente.map(v => `<div class="carte"><div class="ligne"><b>${esc(v.e.title)}</b><span class="petit-texte">${v.nb} confirmés · ${v.na} en attente · ${Math.max(0, v.e.capacity - v.nb - v.na)} places libres sur ${v.e.capacity}</span></div>
+      <div class="barre" role="progressbar" aria-valuenow="${v.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${v.pct}%"></i></div><p class="petit-texte" style="margin-top:.4rem">${fmt(v.cash)} encaissés · ${v.pct} % des places prises</p></div>`).join("") +
+    `<div class="ligne g" style="margin:.4rem 0 1rem"><button class="petit" id="xls">Exporter les ventes (Excel)</button>${"Notification" in window && !notifOk ? `<button class="petit" id="notif">Activer les alertes de commande</button>` : `<span class="petit-texte">${notifOk ? "Alertes de commande actives tant que le site reste ouvert." : ""}</span>`}</div>
     <label>Afficher<select id="flt">${[["pending", "À valider"], ["confirmed", "Confirmées"], ["rejected", "Refusées"], ["all", "Toutes"]].map(([v, l]) => `<option value="${v}" ${ofilter === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>` +
     (list.length ? list.map(o => `<div class="carte"><div class="ligne"><b>${esc(o.profiles?.full_name)} · ${esc(o.profiles?.phone)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
       <p class="petit-texte">${esc(TYPES[o.profiles?.account_type])} · ${esc(o.events.title)} · ${o.qty} billet(s)</p>
       <div class="scroll"><table class="cmp"><tr><th>Montant à retrouver</th><td><b>${fmt(o.total)}</b> (${o.qty} × ${fmt(o.unit_price)})</td></tr>
         <tr><th>Référence Mixx by Yas</th><td>${esc(o.reference)}</td></tr><tr><th>Numéro payeur</th><td>${esc(o.pay_phone)}</td></tr>
         <tr><th>Heure de la commande</th><td>${dts(o.created_at)} (heure de Lomé)</td></tr><tr><th>Code de commande</th><td>${esc(o.order_code)}</td></tr></table></div>
-      <div class="ligne g"><button class="petit" data-proof="${esc(o.proof_path)}">Voir la capture</button>
+      ${o.status === "pending" ? `<a class="preuve" data-proofimg="${esc(o.proof_path)}" href="#" aria-label="Agrandir la capture"><span class="petit-texte">Chargement de la capture…</span></a>` : ""}
+      <div class="ligne g">${o.status === "pending" ? "" : `<button class="petit" data-proof="${esc(o.proof_path)}">Voir la capture</button>`}
       ${o.status === "pending" ? `<button class="petit plein" data-ok="${o.id}">Confirmer</button><button class="petit danger" data-no="${o.id}">Refuser</button>` : ""}</div>
       ${o.status === "confirmed" ? `<div class="billets">${(o.tickets || []).map(t => `<div class="billet ${t.status}"><b>${esc(t.code)}</b><br><span class="badge ${t.status}">${BILLET[t.status]}</span>${t.status === "valid" ? `<br><button class="petit danger" data-cancel="${t.id}" style="margin-top:.4rem">Annuler</button>` : ""}</div>`).join("")}</div>` : ""}</div>`).join("")
       : "<p>Aucune commande dans cette liste.</p>");
+  countUp(box);
   $("flt").onchange = () => { ofilter = $("flt").value; adminPage(); };
+  if ($("notif")) $("notif").onclick = async () => { await Notification.requestPermission(); adminPage(); };
+  $("xls").onclick = () => {
+    const rows = [["Date", "Événement", "Nom", "Téléphone", "Type de compte", "Billets", "Prix unitaire", "Total", "Statut", "Référence Mixx by Yas", "Numéro payeur", "Code de commande", "Codes des billets", "Billets utilisés"]]
+      .concat(data.map(o => [dts(o.created_at), o.events?.title, o.profiles?.full_name, o.profiles?.phone, TYPES[o.profiles?.account_type] || "", o.qty, o.unit_price, o.total, STATUT[o.status], o.reference, o.pay_phone, o.order_code,
+        (o.tickets || []).map(t => t.code).join(" "), (o.tickets || []).filter(t => t.status === "used").length]));
+    download(`ventes-ipnet-events-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
   const act = async (name, args, okMsg) => { const r = await rpc(name, args); if (r.error) alert(r.error); else if (okMsg === "confetti") confetti(); adminPage(); };
+  const paths = [...box.querySelectorAll("[data-proofimg]")].map(a => a.dataset.proofimg);
+  if (paths.length) sb.storage.from("proofs").createSignedUrls(paths, 900).then(({ data: urls }) => {
+    box.querySelectorAll("[data-proofimg]").forEach(a => {
+      const u = (urls || []).find(x => x.path === a.dataset.proofimg)?.signedUrl;
+      if (!u) { a.innerHTML = `<span class="petit-texte">Capture indisponible.</span>`; return; }
+      a.innerHTML = `<img src="${esc(u)}" alt="Capture du paiement" loading="lazy">`; a.href = u; a.target = "_blank"; a.rel = "noopener";
+    });
+  });
   box.querySelectorAll("[data-proof]").forEach(b => b.onclick = async () => {
     const { data: u, error } = await sb.storage.from("proofs").createSignedUrl(b.dataset.proof, 600);
     if (error) return alert("Impossible d'ouvrir la capture.");
@@ -701,6 +870,35 @@ async function adminOrders(box) {
   box.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => { if (confirm("Confirmer cette commande ?\nVérifie d'abord que l'argent est bien arrivé dans Mixx by Yas (montant, référence, numéro).")) act("admin_decide_order", { p_order: b.dataset.ok, p_decision: "confirm" }, "confetti"); });
   box.querySelectorAll("[data-no]").forEach(b => b.onclick = () => { if (confirm("Refuser cette commande ?")) act("admin_decide_order", { p_order: b.dataset.no, p_decision: "reject" }); });
   box.querySelectorAll("[data-cancel]").forEach(b => b.onclick = () => { if (confirm("Annuler ce billet ? Il sera refusé à l'entrée.")) act("admin_cancel_ticket", { p_ticket: b.dataset.cancel }); });
+}
+
+/* Les chiffres défilent jusqu'à leur valeur */
+function countUp(root) {
+  root.querySelectorAll(".cu").forEach(el => {
+    const n = +el.dataset.n || 0, f = v => el.dataset.f === "fcfa" ? fmt(v) : Math.round(v).toLocaleString("fr-FR");
+    if (REDUCE || n === 0) { el.textContent = f(n); return; }
+    const t0 = performance.now(), d = 700;
+    const step = t => { const k = Math.min(1, (t - t0) / d); el.textContent = f(n * (1 - Math.pow(1 - k, 3))); if (k < 1 && el.isConnected) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+
+/* Alertes en direct : une commande arrive pendant que l'admin a le site ouvert */
+let ordersChan = null;
+function watchOrders(on) {
+  if (!on) { if (ordersChan) { sb.removeChannel(ordersChan); ordersChan = null; } return; }
+  if (ordersChan) return;
+  ordersChan = sb.channel("nouvelles-commandes").on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, p => {
+    const o = p.new || {}; const msg = `Nouvelle commande : ${o.qty} billet(s) · ${fmt(o.total)}`;
+    try { bip(true); } catch {}
+    toast(msg);
+    if ("Notification" in window && Notification.permission === "granted") { try { new Notification("IPNET Events", { body: msg, icon: "icon-192.png" }); } catch {} }
+    if (location.hash.startsWith("#/admin") && tab === "orders") adminPage();
+  }).subscribe();
+}
+function toast(t) {
+  const d = document.createElement("div"); d.className = "toast"; d.setAttribute("role", "status"); d.textContent = t; document.body.appendChild(d);
+  setTimeout(() => d.classList.add("out"), 6000); setTimeout(() => d.remove(), 6600);
 }
 
 async function adminEvents(box, editId) {
@@ -843,7 +1041,12 @@ async function adminAccounts(box) {
     const q = sansAccent($("q").value), d = $("q").value.replace(/\D/g, "");
     const f = list.filter(u => !q && !d || (q && sansAccent(u.full_name).includes(q)) || (d.length >= 3 && String(u.phone).includes(d)));
     $("ul").innerHTML = f.map(u => `<div class="carte"><div class="ligne"><span><b>${esc(u.full_name)}</b> · ${esc(TYPES[u.account_type])}<br><span class="petit-texte">${esc(u.phone)} · inscrit le ${dts(u.created_at)}</span>
-      ${u.blocked ? ` <span class="badge blocked">Bloqué</span>` : ""}</span><button class="petit ${u.blocked ? "" : "danger"}" data-b="${u.blocked ? 0 : 1}" data-id="${u.id}">${u.blocked ? "Débloquer" : "Bloquer"}</button></div></div>`).join("") || "<p>Aucun compte.</p>";
+      ${u.blocked ? ` <span class="badge blocked">Bloqué</span>` : ""}${u.role === "controller" ? ` <span class="badge confirmed">Contrôleur</span>` : ""}</span>
+      <span class="ligne g"><button class="petit" data-role="${u.role === "controller" ? "user" : "controller"}" data-id="${u.id}">${u.role === "controller" ? "Retirer le contrôle" : "Nommer contrôleur"}</button><button class="petit ${u.blocked ? "" : "danger"}" data-b="${u.blocked ? 0 : 1}" data-id="${u.id}">${u.blocked ? "Débloquer" : "Bloquer"}</button></span></div></div>`).join("") || "<p>Aucun compte.</p>";
+    $("ul").querySelectorAll("[data-role]").forEach(b => b.onclick = async () => {
+      if (b.dataset.role === "controller" && !confirm("Nommer ce compte contrôleur ? Il pourra scanner et valider les billets, mais ne verra ni les commandes ni l'argent.")) return;
+      const r = await rpc("admin_set_role", { p_profile: b.dataset.id, p_role: b.dataset.role }); if (r.error) alert(r.error); adminPage();
+    });
     $("ul").querySelectorAll("[data-b]").forEach(b => b.onclick = async () => { const r = await rpc("admin_block_user", { p_profile: b.dataset.id, p_blocked: b.dataset.b === "1" }); if (r.error) alert(r.error); adminPage(); });
   };
   $("q").oninput = draw; draw();
@@ -863,7 +1066,7 @@ function scanHtml(d) {
   return `<div class="scanres ${ok || valid ? "ok" : "ko"}"><b>${titre}</b>${sous ? `<span>${esc(sous)}</span>` : ""}
     <div class="scanbig">${esc(d.entered)} / ${esc(d.total)} entrées</div></div>
     <div class="carte"><b style="font-size:1.2rem">${esc(d.holder)}</b><div class="scroll"><table class="cmp">
-      <tr><th>Téléphone</th><td>${esc(d.phone)}</td></tr><tr><th>Type</th><td>${esc(TYPES[d.account_type])}</td></tr>
+      ${d.buyer && d.buyer !== d.holder ? `<tr><th>Acheté par</th><td>${esc(d.buyer)}</td></tr>` : ""}<tr><th>Téléphone</th><td>${esc(d.phone)}</td></tr><tr><th>Type</th><td>${esc(TYPES[d.account_type])}</td></tr>
       <tr><th>Événement</th><td>${esc(d.event)}</td></tr><tr><th>Commande</th><td>${esc(d.order_code)} (${esc(d.qty)} billet(s))</td></tr></table></div>
     ${d.account_type === "student" && (ok || valid) ? `<p class="petit-texte">Étudiant déclaré : demande la carte d'étudiant si besoin.</p>` : ""}
     ${valid ? `<button class="plein" id="use">Valider l'entrée</button>` : ""}</div>`;
@@ -875,12 +1078,12 @@ async function ticketPage(code) {
   const wrap = h => show(`<div class="wrap" style="max-width:520px"><div class="grandlogo">${logo()}</div>${h}</div>`);
   if (!me) return wrap(`<h1 class="mini">Billet IPNET Events</h1><br><p style="margin-bottom:1rem">Ceci est un billet. Il se valide à l'entrée, par l'équipe de contrôle.</p>
     <a class="btn plein" href="#/login">Je suis du contrôle : me connecter</a>`);
-  if (profile?.role !== "admin") return wrap(`<h1 class="mini">Billet IPNET Events</h1><br><p>Ce billet est à présenter à l'entrée. Seule l'équipe de contrôle peut le valider.</p>`);
+  if (!["admin", "controller"].includes(profile?.role)) return wrap(`<h1 class="mini">Billet IPNET Events</h1><br><p>Ce billet est à présenter à l'entrée. Seule l'équipe de contrôle peut le valider.</p>`);
   startIdle();
   wrap(`<p>Vérification du billet…</p>`);
   const r = await rpc("admin_scan_ticket", { p_code: code, p_mark: true });
   if (r.error) return wrap(flash(r.error));
-  wrap(`${scanHtml(r.data)}<div class="ligne g" style="margin-top:1rem"><a class="btn" href="#/admin">Ouvrir le scanner</a></div>
+  wrap(`${scanHtml(r.data)}<div class="ligne g" style="margin-top:1rem"><a class="btn" href="${profile?.role === "admin" ? "#/admin" : "#/scan"}">Ouvrir le scanner</a></div>
     <p class="petit-texte" style="margin-top:1rem">Pour le billet suivant, scanne simplement son QR avec l'appareil photo.</p>`);
   if (r.data.found) { bip(r.data.result === "entered"); if (r.data.result === "entered") confetti(); }
 }
@@ -966,7 +1169,8 @@ async function adminStats(box) {
   if (r.error) return box.innerHTML = flash(`${r.error} [${r.raw || ""}] — as-tu lancé migration_stats.sql dans Supabase ?`);
   const d = r.data, n = x => Number(x || 0).toLocaleString("fr-FR");
   const max = Math.max(1, ...d.jours.map(j => j.vues));
-  const tuile = (v, l) => `<div><b>${n(v)}</b>${l}</div>`;
+  const tuile = (v, l) => `<div><b class="cu" data-n="${Number(v) || 0}">0</b>${l}</div>`;
+  setTimeout(() => countUp(box), 0);
   box.innerHTML = `<div class="stats">${tuile(d.en_ligne, "en ligne maintenant")}${tuile(d.aujourdhui, "visiteurs aujourd'hui")}${tuile(d.sept_jours, "visiteurs sur 7 jours")}${tuile(d.trente_jours, "visiteurs sur 30 jours")}</div>
     <div class="stats">${tuile(d.total, "personnes venues sur le site")}${tuile(d.vues_total, "pages vues au total")}${tuile(d.comptes, "comptes créés")}${tuile(d.acheteurs, "acheteurs confirmés")}${tuile(d.billets, "billets émis")}${tuile(d.entres, "entrées validées")}</div>
     <div class="carte"><b>14 derniers jours</b><div style="margin-top:.8rem">` + d.jours.map(j => `<div class="ligne" style="gap:.6rem;margin:.3rem 0"><span class="petit-texte" style="min-width:5.5rem">${esc(j.d.slice(5).split("-").reverse().join("/"))}</span>
