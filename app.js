@@ -166,11 +166,10 @@ async function route() {
   }
   if (my !== rid) return;
 
-  const clair = document.documentElement.getAttribute("data-theme") === "light", grand = document.documentElement.hasAttribute("data-big");
+  const grand = document.documentElement.hasAttribute("data-big");
   $("nav").innerHTML = `<b><a href="#/" class="marque">${logo()}<span>${esc(SITE_NAME)}</span></a></b><span>` +
     (me ? `<a href="#/me">Mes billets</a>${profile?.role === "admin" ? `<a href="#/admin">Admin</a>` : ""}<a href="#" id="out">Déconnexion</a>`
-        : `<a href="#/login">Connexion</a>`) + `<button type="button" class="icone" id="th" aria-label="Changer entre thème clair et sombre" title="Thème">${clair ? "☾" : "☀"}</button><button type="button" class="icone" id="gt" aria-label="Agrandir le texte" aria-pressed="${grand}" title="Texte plus grand">A+</button></span>`;
-  $("th").onclick = () => { const n = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"; document.documentElement.setAttribute("data-theme", n); try { localStorage.setItem("theme", n); } catch {} $("th").textContent = n === "light" ? "☾" : "☀"; };
+        : `<a href="#/login">Connexion</a>`) + `<button type="button" class="icone" id="gt" aria-label="Agrandir le texte" aria-pressed="${grand}" title="Texte plus grand">A+</button></span>`;
   $("gt").onclick = () => { const on = !document.documentElement.hasAttribute("data-big"); if (on) document.documentElement.setAttribute("data-big", "1"); else document.documentElement.removeAttribute("data-big"); try { localStorage.setItem("big", on ? "1" : "0"); } catch {} $("gt").setAttribute("aria-pressed", on); };
   document.querySelectorAll('#nav a[href^="#/"]').forEach(l => l.addEventListener("click", () => { if (l.getAttribute("href") === location.hash) route(); }));
   if ($("out")) $("out").onclick = async e => { e.preventDefault(); forgetTickets(); await sb.auth.signOut(); location.hash = "#/"; };
@@ -275,11 +274,9 @@ const genCode = () => "IPN-" + String(crypto.getRandomValues(new Uint32Array(1))
 /* Galerie d'ambiance : les images et vidéos de fond de l'événement */
 function galerie(e) {
   const ok = u => typeof u === "string" && /^https:\/\/[a-z0-9-]+\.supabase\.co\//.test(u);
-  const items = (Array.isArray(e.bg_media) ? e.bg_media : []).filter(m => m && ok(m.url) && (m.kind === "image" || m.kind === "video")).slice(0, 8);
+  const items = (Array.isArray(e.gallery) ? e.gallery : []).filter(m => m && ok(m.url)).slice(0, 12);
   if (!items.length) return "";
-  return `<h2 class="rv">Ambiance</h2><div class="galerie rv" tabindex="0" aria-label="Photos et vidéos de l'événement">` + items.map(m => m.kind === "video"
-    ? `<video src="${esc(m.url)}" muted playsinline controls preload="metadata"></video>`
-    : `<img src="${esc(m.url)}" alt="Ambiance de ${esc(e.title)}" loading="lazy">`).join("") + `</div>`;
+  return `<h2 class="rv">Photos</h2><div class="galerie rv" tabindex="0" aria-label="Photos de l'événement">` + items.map(m => `<img src="${esc(m.url)}" alt="Photo de ${esc(e.title)}" loading="lazy">`).join("") + `</div>`;
 }
 const icsEsc = t => String(t || "").replace(/\\/g, "\\\\").replace(/[,;]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
 function addToCalendar(e) {
@@ -714,6 +711,7 @@ async function adminEvents(box, editId) {
   const val = k => esc(ed?.[k] ?? "");
   let medias = ed ? (Array.isArray(ed.bg_media) && ed.bg_media.length ? ed.bg_media.slice() : (ed.bg_url ? [{ url: ed.bg_url, kind: ed.bg_kind }] : [])) : [];
   const removed = [];
+  let photos = ed && Array.isArray(ed.gallery) ? ed.gallery.slice() : [];
   box.innerHTML = `<form id="f" class="formcard"><h3 style="margin-bottom:.6rem">${ed ? "Modifier : " + esc(ed.title) : "Nouvel événement"}</h3>
     <div class="section" style="border:0;margin-top:.6rem">L'événement</div>
     <div class="grille"><label>Titre<input id="t" required maxlength="120" value="${val("title")}" placeholder="Soirée Amapiano"></label><label>Slogan (facultatif)<input id="s" maxlength="200" value="${val("tagline")}" placeholder="La nuit de l'amapiano"></label></div>
@@ -733,6 +731,9 @@ async function adminEvents(box, editId) {
     <fieldset><legend>Fonds de la page : images et vidéos (8 maximum, elles défilent toutes seules)</legend>
     <div id="medias" class="medias"></div>
     <label>Ajouter des images (JPG, PNG, WebP) ou des vidéos courtes (MP4, WebM, 40 Mo max chacune)<input id="bg" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"></label></fieldset>
+    <fieldset><legend>Photos de l'événement (12 maximum, affichées dans la galerie de la page)</legend>
+    <div id="photos" class="medias"></div>
+    <label>Ajouter des photos (JPG, PNG, WebP, 10 Mo max chacune)<input id="gal" type="file" multiple accept="image/jpeg,image/png,image/webp"></label></fieldset>
     <p class="petit-texte">Conseil : vidéo de 10 à 20 secondes, sans son, moins de 10 Mo, pour que la page reste rapide sur téléphone.</p><br>
     <div class="ligne g"><button class="plein large" id="sv">${ed ? "Enregistrer les modifications" : "Créer l'événement"}</button>${ed ? `<button type="button" id="cn">Annuler</button>` : ""}</div><div id="err" style="margin-top:1rem"></div></form>
     <h2>Événements existants</h2>` + (data || []).map(e => `<div class="carte"><div class="ligne"><span><b>${esc(e.title)}</b> · ${dt(e.starts_at)}${e.active ? "" : ` <span class="badge none">Masqué</span>`}<br>
@@ -748,6 +749,15 @@ async function adminEvents(box, editId) {
     $("medias").querySelectorAll("[data-dn]").forEach(b => b.onclick = () => { const k = +b.dataset.dn; [medias[k + 1], medias[k]] = [medias[k], medias[k + 1]]; drawMedias(); });
   };
   drawMedias();
+  const drawPhotos = () => {
+    $("photos").innerHTML = photos.length ? photos.map((m, i) => `<div class="media"><img src="${esc(m.url)}" alt=""><span class="petit-texte">Photo ${i + 1}</span>
+      <div class="ligne g"><button type="button" class="petit" data-pup="${i}" ${i ? "" : "disabled"}>←</button><button type="button" class="petit" data-pdn="${i}" ${i < photos.length - 1 ? "" : "disabled"}>→</button><button type="button" class="petit danger" data-prm="${i}">Retirer</button></div></div>`).join("")
+      : `<p class="petit-texte">Aucune photo : la galerie n'apparaîtra pas sur la page.</p>`;
+    $("photos").querySelectorAll("[data-prm]").forEach(b => b.onclick = () => { removed.push(photos[+b.dataset.prm].url); photos.splice(+b.dataset.prm, 1); drawPhotos(); });
+    $("photos").querySelectorAll("[data-pup]").forEach(b => b.onclick = () => { const k = +b.dataset.pup; [photos[k - 1], photos[k]] = [photos[k], photos[k - 1]]; drawPhotos(); });
+    $("photos").querySelectorAll("[data-pdn]").forEach(b => b.onclick = () => { const k = +b.dataset.pdn; [photos[k + 1], photos[k]] = [photos[k], photos[k + 1]]; drawPhotos(); });
+  };
+  drawPhotos();
   const redo = () => adminEvents(box);
   if ($("cn")) $("cn").onclick = redo;
   box.querySelectorAll("[data-ed]").forEach(b => b.onclick = () => { adminEvents(box, b.dataset.ed); scrollTo({ top: 0 }); });
@@ -779,7 +789,21 @@ async function adminEvents(box, editId) {
       if (!kinds[f.type]) return fail(`« ${f.name} » : format non accepté (JPG, PNG, WebP, MP4 ou WebM).`);
       if (f.size > 40 * 1024 * 1024) return fail(`« ${f.name} » est trop lourd (40 Mo maximum).`);
     }
+    const gfiles = [...$("gal").files];
+    if (photos.length + gfiles.length > 12) return fail("12 photos maximum : retire-en quelques-unes avant d'en ajouter.");
+    for (const f of gfiles) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) return fail(`« ${f.name} » : seules les photos JPG, PNG et WebP sont acceptées dans la galerie.`);
+      if (f.size > 10 * 1024 * 1024) return fail(`« ${f.name} » est trop lourde (10 Mo maximum).`);
+    }
     const label = ed ? "Enregistrer les modifications" : "Créer l'événement";
+    const gadded = [];
+    for (let k = 0; k < gfiles.length; k++) {
+      btn.textContent = `Envoi de la photo ${k + 1}/${gfiles.length}…`;
+      const f = gfiles[k], path = `galerie-${crypto.randomUUID()}.${kinds[f.type]}`;
+      const up = await sb.storage.from("event-media").upload(path, f, { contentType: f.type, upsert: false });
+      if (up.error) { btn.textContent = label; return fail("Envoi de la photo impossible : " + up.error.message); }
+      gadded.push({ url: sb.storage.from("event-media").getPublicUrl(path).data.publicUrl });
+    }
     const added = [];
     for (let k = 0; k < files.length; k++) {
       btn.textContent = `Envoi du fond ${k + 1}/${files.length}…`;
@@ -789,7 +813,7 @@ async function adminEvents(box, editId) {
       added.push({ url: sb.storage.from("event-media").getPublicUrl(path).data.publicUrl, kind: f.type.startsWith("video") ? "video" : "image" });
     }
     btn.textContent = label;
-    medias = medias.concat(added);
+    medias = medias.concat(added); photos = photos.concat(gadded); row.gallery = photos;
     row.bg_media = medias; row.bg_url = medias[0]?.url ?? null; row.bg_kind = medias[0]?.kind ?? null;
     const { error } = ed ? await sb.from("events").update(row).eq("id", ed.id) : await sb.from("events").insert(row);
     if (error) {
@@ -800,6 +824,7 @@ async function adminEvents(box, editId) {
       else if (/events_check|sales_open|sales_close/i.test(m)) why = "la fin de la billetterie doit être APRÈS son ouverture, et l'ouverture doit être avant l'événement.";
       else if (/valid_tiers|tiers/i.test(m)) why = "paliers invalides. Format exact : 2000;2026-11-10;2026-11-20 (une ligne par palier, prix > 0).";
       else if (/slug/i.test(m)) why = "lien invalide : minuscules, chiffres et tirets seulement (ex : soiree-amapiano).";
+      else if (/gallery/i.test(m)) why = "la base n'est pas à jour : lance d'abord le fichier migration_galerie.sql dans Supabase.";
       else if (/bg_media|bg_/i.test(m)) why = "la base n'est pas à jour : lance d'abord le fichier migration_v3.sql dans Supabase.";
       return fail((ed ? "Modification" : "Création") + " impossible : " + why + " [" + m + "]");
     }
@@ -972,7 +997,7 @@ async function adminReset(box) {
     b.disabled = true; out.innerHTML = flash("Effacement en cours…", true);
     // fichiers à nettoyer côté stockage (captures de paiement, fonds d'événements), récupérés avant l'effacement
     const proofs = ["commandes", "comptes", "evenements", "tout"].includes(k) ? ((await sb.from("orders").select("proof_path").limit(5000)).data || []).map(o => o.proof_path).filter(Boolean) : [];
-    const media = ["evenements", "tout"].includes(k) ? ((await sb.from("events").select("bg_media,bg_url")).data || []).flatMap(e => [...(e.bg_media || []).map(m => m.url), e.bg_url]).map(u => String(u || "").split("/event-media/")[1]).filter(Boolean) : [];
+    const media = ["evenements", "tout"].includes(k) ? ((await sb.from("events").select("bg_media,bg_url,gallery")).data || []).flatMap(e => [...(e.bg_media || []).map(m => m.url), ...(e.gallery || []).map(m => m.url), e.bg_url]).map(u => String(u || "").split("/event-media/")[1]).filter(Boolean) : [];
     const r = k === "stats" ? await rpc("admin_reset_stats", {}) : await rpc("admin_reset", { p_scope: k });
     if (!r.error && k === "tout") await rpc("admin_reset_stats", {});
     if (r.error) { b.disabled = false; return out.innerHTML = flash(`${r.error} [${r.raw || ""}]`); }
