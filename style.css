@@ -365,3 +365,15 @@ nav .icone:hover{color:var(--tx);transform:none}
 .merci{margin-top:1.4rem;padding:1.4rem;border-radius:1.2rem;background:var(--glass);border:1px solid var(--bord)}
 .merci b{font-family:'Sora',sans-serif;font-size:1.5rem;display:block;margin-bottom:.3rem}
 .merci p{color:var(--mu);margin-bottom:1rem}
+
+/* Partage WhatsApp / TikTok */
+.partage{display:flex;align-items:center;gap:.7rem;margin-top:1.3rem;color:var(--mu);font-weight:700}
+.partage .rond{width:3rem;height:3rem;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--glass);border:1px solid var(--bord)}
+.partage .rond:hover{transform:translateY(-2px) scale(1.06);box-shadow:0 10px 26px -10px var(--c)}
+.partage .rond svg{display:block}
+
+/* Aide : petite icône « ? » avec le mot dessous, dans le menu */
+nav .aide-nav{display:inline-flex;flex-direction:column;align-items:center;gap:.05rem;margin-left:.9rem;text-decoration:none;color:var(--mu);line-height:1}
+nav .aide-nav i{font-style:normal;width:1.5rem;height:1.5rem;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.95rem;color:var(--tx);border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 22%,transparent)}
+nav .aide-nav span{font-size:.62rem;font-weight:700;letter-spacing:.04em}
+nav .aide-nav:hover i{background:var(--c);color:#1a0b22}
