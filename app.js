@@ -167,11 +167,9 @@ async function route() {
   }
   if (my !== rid) return;
 
-  const grand = document.documentElement.hasAttribute("data-big");
   $("nav").innerHTML = `<b><a href="#/" class="marque">${logo()}<span>${esc(SITE_NAME)}</span></a></b><span>` +
     (me ? `<a href="#/me">Mes billets</a>${profile?.role === "admin" ? `<a href="#/admin">Admin</a>` : profile?.role === "controller" ? `<a href="#/scan">Contrôle</a>` : ""}<a href="#" id="out">Déconnexion</a>`
-        : `<a href="#/login">Connexion</a>`) + `<a href="#/aide" class="aide-nav" aria-label="Aide"><i>?</i><span>Aide</span></a><button type="button" class="icone" id="gt" aria-label="Agrandir le texte" aria-pressed="${grand}" title="Texte plus grand">A+</button></span>`;
-  $("gt").onclick = () => { const on = !document.documentElement.hasAttribute("data-big"); if (on) document.documentElement.setAttribute("data-big", "1"); else document.documentElement.removeAttribute("data-big"); try { localStorage.setItem("big", on ? "1" : "0"); } catch {} $("gt").setAttribute("aria-pressed", on); };
+        : `<a href="#/login">Connexion</a>`) + `<a href="#/aide" class="aide-nav" aria-label="Aide"><i>?</i><span>Aide</span></a></span>`;
   document.querySelectorAll('#nav a[href^="#/"]').forEach(l => l.addEventListener("click", () => { if (l.getAttribute("href") === location.hash) route(); }));
   if ($("out")) $("out").onclick = async e => { e.preventDefault(); forgetTickets(); await sb.auth.signOut(); location.hash = "#/"; };
 
@@ -303,18 +301,28 @@ function galerie(e) {
   if (!items.length) return "";
   return `<h2 class="rv">Photos</h2><div class="galerie rv" tabindex="0" aria-label="Photos de l'événement">` + items.map(m => `<img src="${esc(m.url)}" alt="Photo de ${esc(e.title)}" loading="lazy">`).join("") + `</div>`;
 }
-const ICON_WA = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="#25d366" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z"/><path fill="#fff" d="M8.6 7.5c.3-.5.8-.5 1.1-.1l.8 1.2c.2.3.2.7-.1 1l-.5.5c.7 1.3 1.7 2.3 3 3l.6-.5c.3-.3.7-.3 1 0l1.2.8c.4.3.4.8 0 1.2-.7.8-1.7 1.2-2.7.9-3-.9-5.2-3.1-6-6-.2-.9.2-1.7.6-2z"/></svg>`;
-const ICON_TT = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#111"/><path fill="#25f4ee" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z" transform="translate(-.5 -.4)"/><path fill="#fe2c55" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z" transform="translate(.5 .4)"/><path fill="#fff" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z"/></svg>`;
+const svg = (inner, bg) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">${bg}${inner}</svg>`;
+const RESEAUX = [
+  { id: "wa", nom: "WhatsApp", ic: svg(`<path fill="#fff" d="M8.6 7.5c.3-.5.8-.5 1.1-.1l.8 1.2c.2.3.2.7-.1 1l-.5.5c.7 1.3 1.7 2.3 3 3l.6-.5c.3-.3.7-.3 1 0l1.2.8c.4.3.4.8 0 1.2-.7.8-1.7 1.2-2.7.9-3-.9-5.2-3.1-6-6-.2-.9.2-1.7.6-2z"/>`, `<path fill="#25d366" d="M12 1.5a10.5 10.5 0 0 0-9 15.8L1.5 22.5l5.4-1.4A10.5 10.5 0 1 0 12 1.5z"/>`), url: (t, u) => "https://wa.me/?text=" + encodeURIComponent(t + " " + u) },
+  { id: "fb", nom: "Facebook", ic: svg(`<path fill="#fff" d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.9.3-1.5 1.5-1.5h1.5V4.4c-.3 0-1.2-.1-2.2-.1-2.2 0-3.7 1.3-3.7 3.8v2.4H8v3h2.6V21z"/>`, `<circle cx="12" cy="12" r="11" fill="#1877f2"/>`), url: (t, u) => "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(u) },
+  { id: "tg", nom: "Telegram", ic: svg(`<path fill="#fff" d="M5.2 11.6l12.6-5c.6-.2 1.1.1.9 1l-2.1 10c-.2.7-.6.9-1.2.6l-3.2-2.4-1.5 1.5c-.2.2-.3.3-.7.3l.2-3.3 5.9-5.3c.3-.2-.1-.4-.4-.2l-7.3 4.6-3.1-1c-.7-.2-.7-.7 0-1z"/>`, `<circle cx="12" cy="12" r="11" fill="#29a9eb"/>`), url: (t, u) => "https://t.me/share/url?url=" + encodeURIComponent(u) + "&text=" + encodeURIComponent(t) },
+  { id: "x", nom: "X", ic: svg(`<path d="M7.5 7l9 10M16.5 7l-9 10" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>`, `<circle cx="12" cy="12" r="11" fill="#111"/>`), url: (t, u) => "https://twitter.com/intent/tweet?text=" + encodeURIComponent(t) + "&url=" + encodeURIComponent(u) },
+  { id: "ig", nom: "Instagram", ic: svg(`<rect x="6.2" y="6.2" width="11.6" height="11.6" rx="3.4" fill="none" stroke="#fff" stroke-width="1.7"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="#fff" stroke-width="1.7"/><circle cx="15.7" cy="8.3" r=".9" fill="#fff"/>`, `<defs><linearGradient id="igg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fdcb5c"/><stop offset=".45" stop-color="#e1306c"/><stop offset="1" stop-color="#6a3de8"/></linearGradient></defs><circle cx="12" cy="12" r="11" fill="url(#igg)"/>`), copie: "https://www.instagram.com/" },
+  { id: "tt", nom: "TikTok", ic: svg(`<path fill="#25f4ee" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z" transform="translate(-.5 -.4) scale(.9) translate(1.2 1.2)"/><path fill="#fe2c55" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z" transform="translate(.5 .4) scale(.9) translate(1.2 1.2)"/><path fill="#fff" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z" transform="scale(.9) translate(1.2 1.2)"/>`, `<circle cx="12" cy="12" r="11" fill="#111"/>`), copie: "https://www.tiktok.com/" },
+  { id: "lien", nom: "Copier le lien", ic: svg(`<path d="M10 14l4-4M9 11.5l-1.6 1.6a2.6 2.6 0 0 0 3.7 3.7l1.6-1.6M15 12.5l1.6-1.6a2.6 2.6 0 0 0-3.7-3.7l-1.6 1.6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>`, `<circle cx="12" cy="12" r="11" fill="#6b5fd0"/>`), copie: "" }
+];
 const lienEvent = e => baseUrl() + "#/e/" + e.slug;
 const texteEvent = e => `${e.title} · ${dt(e.starts_at)}${e.venue ? " · " + e.venue : ""}. Réserve ton billet :`;
-function shareWhatsApp(e) { window.open("https://wa.me/?text=" + encodeURIComponent(texteEvent(e) + " " + lienEvent(e)), "_blank", "noopener"); }
-/* TikTok n'a pas de lien de partage pour un site : on copie le lien et on ouvre TikTok pour le coller (vidéo, description ou bio) */
-async function shareTikTok(e) {
-  const t = texteEvent(e) + " " + lienEvent(e);
-  try { await navigator.clipboard.writeText(t); toast("Lien copié ! Colle-le dans ta vidéo ou ta bio TikTok."); }
-  catch { toast("Copie ce lien : " + lienEvent(e)); }
-  setTimeout(() => window.open("https://www.tiktok.com/", "_blank", "noopener"), 900);
+/* Instagram et TikTok n'ont pas de lien de partage pour un site : on copie le texte avec le lien et on ouvre l'application pour le coller */
+async function partager(e, id) {
+  const r = RESEAUX.find(x => x.id === id), t = texteEvent(e), u = lienEvent(e);
+  if (r.url) { window.open(r.url(t, u), "_blank", "noopener"); return; }
+  let ok = true; try { await navigator.clipboard.writeText(t + " " + u); } catch { ok = false; }
+  toast(ok ? (r.copie ? `Lien copié ! Colle-le dans ta publication ${r.nom}.` : "Lien copié !") : "Copie ce lien : " + u);
+  if (r.copie) setTimeout(() => window.open(r.copie, "_blank", "noopener"), 900);
 }
+const partageHtml = () => `<div class="partage rv"><span>Partager</span>` + RESEAUX.map(r => `<button type="button" class="rond" data-sh="${r.id}" aria-label="${r.id === "lien" ? r.nom : "Partager sur " + r.nom}" title="${r.nom}">${r.ic}</button>`).join("") + `</div>`;
+
 
 async function eventPage(slug, others) {
   const { data: e } = await sb.from("events").select("*").eq("slug", slug || "").maybeSingle();
@@ -337,7 +345,7 @@ async function eventPage(slug, others) {
     ${e.dress_code ? `<div><dt>Dress code</dt><dd>${esc(e.dress_code)}</dd></div>` : ""}
     <div><dt>Accès</dt><dd>${esc(AUD[e.audience])}</dd></div>
     <div><dt>Places restantes</dt><dd>${left == null ? "—" : Math.max(0, left)}</dd></div></dl>
-    <div class="partage rv"><span>Partager</span><button type="button" id="sh-wa" class="rond wa" aria-label="Partager sur WhatsApp" title="WhatsApp">${ICON_WA}</button><button type="button" id="sh-tt" class="rond tt" aria-label="Partager sur TikTok" title="TikTok">${ICON_TT}</button></div>
+    ${partageHtml()}
     ${galerie(e)}
     ${passe() ? "" : `<h2 class="rv">Les tarifs</h2>`}<div id="paliers" class="rv"${passe() ? " hidden" : ""}></div>
     ${passe() ? "" : `<h2 class="rv">Acheter un billet</h2>`}<div id="achat" class="rv"${passe() ? " hidden" : ""}></div>
@@ -348,8 +356,7 @@ async function eventPage(slug, others) {
       if ($("suite")) $("suite").innerHTML = nx?.[0] ? `<a class="btn plein" href="#/e/${esc(nx[0].slug)}">Prochain événement : ${esc(nx[0].title)}</a>` : `<p class="petit-texte">Le prochain événement sera annoncé bientôt.</p>`;
     });
   }
-  $("sh-wa").onclick = () => shareWhatsApp(e);
-  $("sh-tt").onclick = () => shareTikTok(e);
+  document.querySelectorAll("[data-sh]").forEach(b => b.onclick = () => partager(e, b.dataset.sh));
   if (others && welcome) splash(e);
   const prev = {}; let lastP;
   function tick() {
@@ -366,7 +373,14 @@ async function eventPage(slug, others) {
     $("phrase").textContent = passe() ? "Événement terminé" : fini() ? "La billetterie est fermée." : ouvert() ? (p ? `Billetterie ouverte · Tarif actuel : ${fmt(p.prix)}. Fin de la billetterie dans :` : "Billetterie ouverte, mais aucun tarif n'est actif aujourd'hui. Fin de la billetterie dans :") : "Ouverture de la billetterie dans :";
     if (p !== lastP || lastP === undefined) {
       lastP = p;
-      $("paliers").innerHTML = tiers.map((t, i) => `<div class="palier ${t === p ? "actif" : Date.now() > Date.parse(t.au + "T23:59:59Z") ? "passe" : ""}"><span>${i ? "Ensuite" : "Ouverture"} · ${esc(t.du)} → ${esc(t.au)}</span><b>${fmt(t.prix)}</b></div>`).join("");
+      const jour = d => new Date(d + "T00:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
+      const now = Date.now();
+      $("paliers").className = "tarifs rv vu";
+      $("paliers").innerHTML = tiers.map(t => {
+        const fin = now > Date.parse(t.au + "T23:59:59Z"), actif = t === p, futur = now < Date.parse(t.du + "T00:00:00Z");
+        return `<div class="tarif ${actif ? "actif" : fin ? "passe" : "futur"}"><span class="etat">${actif ? "Tarif actuel" : fin ? "Terminé" : "À venir"}</span>
+          <b>${fmt(t.prix)}</b><span class="jusque">${actif || !futur ? `jusqu'au ${jour(t.au)}` : `dès le ${jour(t.du)}`}</span></div>`;
+      }).join("");
     }
   }
   const key = () => [fini(), ouvert(), palierActuel(tiers)?.du].join("|");
