@@ -265,8 +265,8 @@ async function eventPage(slug, others) {
   const parts = [["j", "jours"], ["h", "heures"], ["m", "min"], ["s", "sec"]];
 
   show(`<div class="hero"><div class="wrap">${e.tagline ? `<p class="pill">${esc(e.tagline)}</p>` : ""}
-    <h1>${esc(e.title)}</h1><p class="quand">${dt(e.starts_at)}</p>
-    <div class="compte">${parts.map(([k, l]) => `<div><b id="cp-${k}">0</b>${l}</div>`).join("")}</div><p id="phrase"></p></div></div>
+    <h1>${esc(e.title)}</h1><p id="phrase" class="phrase"></p>
+    <div class="compte">${parts.map(([k, l]) => `<div><b id="cp-${k}">0</b>${l}</div>`).join("")}</div><p class="quand">${dt(e.starts_at)}</p></div></div>
     <div class="wrap"><dl class="infos rv"><div><dt>Lieu</dt><dd>${esc(e.venue || "Bientôt annoncé")}</dd></div>
     ${e.dress_code ? `<div><dt>Dress code</dt><dd>${esc(e.dress_code)}</dd></div>` : ""}
     <div><dt>Accès</dt><dd>${esc(AUD[e.audience])}</dd></div>
