@@ -130,6 +130,15 @@ const ticketUrl = c => baseUrl() + "#/t/" + c;
 const codeOf = t => { const m = String(t).match(/#\/t\/([A-Za-z0-9]{8,40})/); return (m ? m[1] : String(t)).trim(); };
 let afterLogin = "", resetBusy = false;
 
+/* ---------- Fréquentation (anonyme : un identifiant aléatoire, ni IP ni nom) ---------- */
+const SID = (() => { try { let v = localStorage.getItem("sid"); if (!/^[0-9a-f-]{36}$/.test(v || "")) { v = crypto.randomUUID(); localStorage.setItem("sid", v); } return v; } catch { return crypto.randomUUID(); } })();
+const trackPage = h => { const p = (h || "#/").split("?")[0].replace(/^#/, "") || "/"; return /^\/(admin|mfa|reset)/.test(p) ? null : p.replace(/^\/t\/.*/, "/t").slice(0, 80); };
+function track(beat) {
+  const p = trackPage(location.hash); if (!p) return;
+  sb.rpc("track_visit", { p_sid: SID, p_page: p, p_beat: !!beat }).then(() => {}, () => {});
+}
+setInterval(() => { if (!document.hidden) track(true); }, 60000);
+
 /* ---------- Routage ---------- */
 async function route() {
   const my = ++rid;
@@ -159,6 +168,7 @@ async function route() {
   if ($("out")) $("out").onclick = async e => { e.preventDefault(); await sb.auth.signOut(); location.hash = "#/"; };
 
   const [, a, b] = location.hash.split("/");
+  track(false);
   if (a === "e") return eventPage(b);
   if (a === "login") return me ? (location.hash = "#/") : loginPage(b);
   if (a === "reset") return resetPage();
@@ -590,11 +600,11 @@ const sansAccent = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f
 
 async function adminPage() {
   clearInterval(timer); startIdle();
-  const onglets = [["orders", "Commandes"], ["events", "Événements"], ["accounts", "Comptes"], ["scan", "Contrôle d'entrée"], ["recon", "Rapprochement"], ["log", "Alertes et journal"], ["reset", "Réinitialiser"]];
+  const onglets = [["orders", "Commandes"], ["events", "Événements"], ["accounts", "Comptes"], ["scan", "Contrôle d'entrée"], ["recon", "Rapprochement"], ["log", "Alertes et journal"], ["stats", "Statistiques"], ["reset", "Réinitialiser"]];
   show(`<div class="wrap"><h1 class="mini">Administration</h1><br><div class="onglets">` +
     onglets.map(o => `<button class="${tab === o[0] ? "on" : ""}" data-t="${o[0]}">${o[1]}</button>`).join("") + `</div><div id="panel"></div></div>`);
   document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { tab = b.dataset.t; stopCam(); adminPage(); });
-  ({ orders: adminOrders, events: adminEvents, accounts: adminAccounts, scan: adminScan, recon: adminRecon, log: adminLog, reset: adminReset })[tab]($("panel"));
+  ({ orders: adminOrders, events: adminEvents, accounts: adminAccounts, scan: adminScan, recon: adminRecon, log: adminLog, stats: adminStats, reset: adminReset })[tab]($("panel"));
 }
 
 async function adminOrders(box) {
@@ -856,11 +866,27 @@ function adminScan(box) {
   };
 }
 
+async function adminStats(box) {
+  const r = await rpc("admin_site_stats", {});
+  if (r.error) return box.innerHTML = flash(`${r.error} [${r.raw || ""}] — as-tu lancé migration_stats.sql dans Supabase ?`);
+  const d = r.data, n = x => Number(x || 0).toLocaleString("fr-FR");
+  const max = Math.max(1, ...d.jours.map(j => j.vues));
+  const tuile = (v, l) => `<div><b>${n(v)}</b>${l}</div>`;
+  box.innerHTML = `<div class="stats">${tuile(d.en_ligne, "en ligne maintenant")}${tuile(d.aujourdhui, "visiteurs aujourd'hui")}${tuile(d.sept_jours, "visiteurs sur 7 jours")}${tuile(d.trente_jours, "visiteurs sur 30 jours")}</div>
+    <div class="stats">${tuile(d.total, "personnes venues sur le site")}${tuile(d.vues_total, "pages vues au total")}${tuile(d.comptes, "comptes créés")}${tuile(d.acheteurs, "acheteurs confirmés")}${tuile(d.billets, "billets émis")}${tuile(d.entres, "entrées validées")}</div>
+    <div class="carte"><b>14 derniers jours</b><div style="margin-top:.8rem">` + d.jours.map(j => `<div class="ligne" style="gap:.6rem;margin:.3rem 0"><span class="petit-texte" style="min-width:5.5rem">${esc(j.d.slice(5).split("-").reverse().join("/"))}</span>
+      <span style="flex:1;background:var(--glass);border-radius:.5rem;height:.9rem;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(j.vues / max * 100)}%;background:linear-gradient(90deg,var(--c),#7c5cff)"></i></span>
+      <span class="petit-texte" style="min-width:8rem;text-align:right">${n(j.visiteurs)} visiteur(s) · ${n(j.vues)} vue(s)</span></div>`).join("") + `</div></div>
+    <div class="carte"><b>Pages les plus vues (30 jours)</b><div style="margin-top:.6rem">` + (d.pages.length ? d.pages.map(p => `<div class="ligne" style="margin:.3rem 0"><span>${esc(p.page === "/" ? "Accueil" : p.page.startsWith("/e/") ? "Événement : " + p.page.slice(3) : { "/login": "Connexion", "/me": "Mes billets", "/t": "Page d'un billet" }[p.page] || p.page)}</span><span class="petit-texte">${n(p.visiteurs)} visiteur(s) · ${n(p.vues)} vue(s)</span></div>`).join("") : `<p class="petit-texte">Pas encore de données.</p>`) + `</div></div>
+    <p class="petit-texte">Statistiques anonymes : un identifiant aléatoire par navigateur, sans nom ni adresse IP. Une même personne qui change de téléphone ou vide son navigateur est comptée deux fois. Les pages d'administration ne sont pas comptées.</p>`;
+}
+
 async function adminReset(box) {
   const cnt = async (t, f) => { let q = sb.from(t).select("id", { count: "exact", head: true }); if (f) q = f(q); return (await q).count ?? 0; };
   const [nT, nO, nE, nU, nA, nL] = await Promise.all([cnt("tickets"), cnt("orders"), cnt("events"), cnt("profiles", q => q.neq("role", "admin")), cnt("alerts"), cnt("admin_log")]);
   const actions = [
     ["journal", "Journal et alertes", `${nL} ligne(s) de journal et ${nA} alerte(s) effacées.`],
+    ["stats", "Statistiques de fréquentation", "Le compteur de visiteurs et de pages vues repart à zéro."],
     ["commandes", "Commandes, billets et rapprochement", `${nO} commande(s), ${nT} billet(s) et les captures de paiement effacés. Le rapprochement et les compteurs d'entrées repartent à zéro. Les événements et les comptes sont gardés.`],
     ["comptes", "Comptes clients", `${nU} compte(s) clients effacés, avec leurs commandes et billets. Les administrateurs sont gardés.`],
     ["evenements", "Événements", `${nE} événement(s) effacés, avec leurs commandes, billets et fonds d'écran.`],
@@ -877,7 +903,8 @@ async function adminReset(box) {
     // fichiers à nettoyer côté stockage (captures de paiement, fonds d'événements), récupérés avant l'effacement
     const proofs = ["commandes", "comptes", "evenements", "tout"].includes(k) ? ((await sb.from("orders").select("proof_path").limit(5000)).data || []).map(o => o.proof_path).filter(Boolean) : [];
     const media = ["evenements", "tout"].includes(k) ? ((await sb.from("events").select("bg_media,bg_url")).data || []).flatMap(e => [...(e.bg_media || []).map(m => m.url), e.bg_url]).map(u => String(u || "").split("/event-media/")[1]).filter(Boolean) : [];
-    const r = await rpc("admin_reset", { p_scope: k });
+    const r = k === "stats" ? await rpc("admin_reset_stats", {}) : await rpc("admin_reset", { p_scope: k });
+    if (!r.error && k === "tout") await rpc("admin_reset_stats", {});
     if (r.error) { b.disabled = false; return out.innerHTML = flash(`${r.error} [${r.raw || ""}]`); }
     const rm = async (bucket, names) => { for (let i = 0; i < names.length; i += 100) await sb.storage.from(bucket).remove(names.slice(i, i + 100)).catch(() => {}); };
     await rm("proofs", proofs); await rm("event-media", media);
