@@ -229,3 +229,7 @@ button.large{width:100%;padding:1.05rem;font-size:1.05rem;margin-top:.4rem}
 .medias>p{grid-column:1/-1}
 
 .mixx{display:block;width:150px;height:auto;border-radius:.9rem;margin:0 0 .9rem;box-shadow:0 10px 30px -14px rgba(250,220,0,.5)}
+
+/* Phrase au-dessus du compte à rebours */
+.phrase{font-weight:600;font-size:1.05rem;margin-top:1rem;color:var(--tx)}
+.hero .compte{margin-top:.9rem}
