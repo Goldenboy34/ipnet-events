@@ -170,7 +170,7 @@ async function route() {
   const grand = document.documentElement.hasAttribute("data-big");
   $("nav").innerHTML = `<b><a href="#/" class="marque">${logo()}<span>${esc(SITE_NAME)}</span></a></b><span>` +
     (me ? `<a href="#/me">Mes billets</a>${profile?.role === "admin" ? `<a href="#/admin">Admin</a>` : profile?.role === "controller" ? `<a href="#/scan">Contrôle</a>` : ""}<a href="#" id="out">Déconnexion</a>`
-        : `<a href="#/login">Connexion</a>`) + `<button type="button" class="icone" id="gt" aria-label="Agrandir le texte" aria-pressed="${grand}" title="Texte plus grand">A+</button></span>`;
+        : `<a href="#/login">Connexion</a>`) + `<a href="#/aide" class="aide-nav" aria-label="Aide"><i>?</i><span>Aide</span></a><button type="button" class="icone" id="gt" aria-label="Agrandir le texte" aria-pressed="${grand}" title="Texte plus grand">A+</button></span>`;
   $("gt").onclick = () => { const on = !document.documentElement.hasAttribute("data-big"); if (on) document.documentElement.setAttribute("data-big", "1"); else document.documentElement.removeAttribute("data-big"); try { localStorage.setItem("big", on ? "1" : "0"); } catch {} $("gt").setAttribute("aria-pressed", on); };
   document.querySelectorAll('#nav a[href^="#/"]').forEach(l => l.addEventListener("click", () => { if (l.getAttribute("href") === location.hash) route(); }));
   if ($("out")) $("out").onclick = async e => { e.preventDefault(); forgetTickets(); await sb.auth.signOut(); location.hash = "#/"; };
@@ -182,6 +182,7 @@ async function route() {
   if (a === "reset") return resetPage();
   if (a === "mfa") return mfaPage();
   if (a === "me") return mePage();
+  if (a === "aide") return helpPage();
   if (a === "t") {
     if (!me) { afterLogin = location.hash; return ticketPage(b); }
     if (profile?.role === "admin" && !aal2) { afterLogin = location.hash; location.hash = "#/mfa"; return; }
@@ -279,15 +280,22 @@ function eligible(e, p) {
 const genCode = () => "IPN-" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, "0");
 
 /* Galerie d'ambiance : les images et vidéos de fond de l'événement */
-function faq(e) {
-  const q = [
-    ["Comment payer ?", `Tu paies par Mixx by Yas au numéro affiché dans le formulaire (${esc(e.pay_number || "indiqué à l'achat")}). Tu notes ensuite la référence de la transaction et tu envoies une capture d'écran du paiement.`],
-    ["Quand est-ce que je reçois mon billet ?", "Dès que l'équipe a vérifié ton paiement. Tu suis l'avancement dans « Mes billets » : commande envoyée, vérification, billet prêt."],
-    ["Mon paiement n'est pas validé, que faire ?", "Vérifie que le montant, la référence et la capture sont corrects. Une commande refusée peut être refaite avec une capture plus claire."],
-    ["Comment entrer à l'événement ?", "Présente le QR code de ton billet (sur ton téléphone ou téléchargé). Chaque billet n'est valable qu'une seule fois."],
-    ["Puis-je acheter pour mes amis ?", "Oui : choisis le nombre de billets, puis écris le nom de chaque personne sur son billet dans « Mes billets ». Tu peux aussi lui envoyer son billet."]
-  ];
-  return `<h2 class="rv">Questions fréquentes</h2><div class="faq rv">` + q.map(([a, b]) => `<details><summary>${a}</summary><p>${b}</p></details>`).join("") + `</div>`;
+const FAQ = [
+  ["Comment payer ?", "Tu paies par Mixx by Yas au numéro affiché dans le formulaire d'achat. Tu notes ensuite la référence de la transaction (dans le SMS de confirmation) et tu envoies une capture d'écran du paiement."],
+  ["Quand est-ce que je reçois mon billet ?", "Dès que l'équipe a vérifié ton paiement. Tu suis l'avancement dans « Mes billets » : commande envoyée, vérification, billet prêt."],
+  ["Mon paiement n'est pas validé, que faire ?", "Vérifie que le montant, la référence et la capture sont corrects. Une commande refusée peut être refaite avec une capture plus claire."],
+  ["Comment entrer à l'événement ?", "Présente le QR code de ton billet (sur ton téléphone ou téléchargé). Chaque billet n'est valable qu'une seule fois."],
+  ["Puis-je acheter pour mes amis ?", "Oui : choisis le nombre de billets, puis écris le nom de chaque personne sur son billet dans « Mes billets ». Tu peux aussi lui envoyer son billet avec le bouton « Envoyer »."],
+  ["J'ai perdu mon mot de passe", "Sur la page de connexion, clique sur « Mot de passe oublié » : tu reçois un code par email à taper sur le site."],
+  ["Mon billet s'affiche-t-il sans internet ?", "Oui, si tu as ouvert « Mes billets » au moins une fois avec internet : tes billets valides restent enregistrés sur ton téléphone. Tu peux aussi les télécharger en image."],
+  ["Comment supprimer mon compte ?", "Dans « Mes billets », tout en bas, la section « Mes données » te permet de télécharger tes données ou de supprimer ton compte."]
+];
+function helpPage() {
+  show(`<div class="wrap" style="max-width:720px"><h1 class="mini">Aide</h1><p class="sous" style="margin:.6rem 0 1.4rem">Les réponses aux questions les plus fréquentes.</p>
+    <div class="faq">` + FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("") + `</div>
+    <h2>À propos</h2><div class="carte"><p><b>IPNET Events</b> est la billetterie en ligne des événements du campus de l'IPNET Institute of Technology : tu réserves ton billet, tu paies par Mixx by Yas et tu reçois un QR code personnel, valable une seule fois.</p>
+    <p class="petit-texte" style="margin-top:.6rem">Tes données ne servent qu'à gérer tes billets. Tu peux les télécharger ou les supprimer à tout moment depuis « Mes billets ».</p></div>
+    <div class="ligne g" style="margin-top:1.2rem"><a class="btn" href="#/">Retour aux événements</a></div></div>`);
 }
 function galerie(e) {
   const ok = u => typeof u === "string" && /^https:\/\/[a-z0-9-]+\.supabase\.co\//.test(u);
@@ -295,19 +303,17 @@ function galerie(e) {
   if (!items.length) return "";
   return `<h2 class="rv">Photos</h2><div class="galerie rv" tabindex="0" aria-label="Photos de l'événement">` + items.map(m => `<img src="${esc(m.url)}" alt="Photo de ${esc(e.title)}" loading="lazy">`).join("") + `</div>`;
 }
-const icsEsc = t => String(t || "").replace(/\\/g, "\\\\").replace(/[,;]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
-function addToCalendar(e) {
-  const f = d => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const start = Date.parse(e.starts_at), end = start + 5 * 36e5;
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//IPNET Events//FR", "CALSCALE:GREGORIAN", "BEGIN:VEVENT", `UID:${e.id}@ipnet-events`, `DTSTAMP:${f(Date.now())}`,
-    `DTSTART:${f(start)}`, `DTEND:${f(end)}`, `SUMMARY:${icsEsc(e.title)}`, e.venue ? `LOCATION:${icsEsc(e.venue)}` : "", `DESCRIPTION:${icsEsc((e.tagline ? e.tagline + "\n" : "") + (e.dress_code ? "Dress code : " + e.dress_code + "\n" : "") + baseUrl() + "#/e/" + e.slug)}`,
-    "BEGIN:VALARM", "TRIGGER:-PT2H", "ACTION:DISPLAY", "DESCRIPTION:Rappel", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].filter(Boolean);
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" })); a.download = `${e.slug}.ics`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-}
-async function shareEvent(e) {
-  const url = baseUrl() + "#/e/" + e.slug, text = `${e.title} · ${dt(e.starts_at)}${e.venue ? " · " + e.venue : ""}. Réserve ton billet :`;
-  if (navigator.share) { try { await navigator.share({ title: e.title, text, url }); return; } catch (err) { if (err && err.name === "AbortError") return; } }
-  window.open("https://wa.me/?text=" + encodeURIComponent(text + " " + url), "_blank", "noopener");
+const ICON_WA = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="#25d366" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z"/><path fill="#fff" d="M8.6 7.5c.3-.5.8-.5 1.1-.1l.8 1.2c.2.3.2.7-.1 1l-.5.5c.7 1.3 1.7 2.3 3 3l.6-.5c.3-.3.7-.3 1 0l1.2.8c.4.3.4.8 0 1.2-.7.8-1.7 1.2-2.7.9-3-.9-5.2-3.1-6-6-.2-.9.2-1.7.6-2z"/></svg>`;
+const ICON_TT = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#111"/><path fill="#25f4ee" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z" transform="translate(-.5 -.4)"/><path fill="#fe2c55" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z" transform="translate(.5 .4)"/><path fill="#fff" d="M15.3 5.3c.3 1.9 1.4 3 3.2 3.2v2.3c-1.2 0-2.3-.4-3.2-1v5.2a4.6 4.6 0 1 1-4.6-4.6c.2 0 .5 0 .7.1v2.4a2.3 2.3 0 1 0 1.6 2.2V5.3h2.3z"/></svg>`;
+const lienEvent = e => baseUrl() + "#/e/" + e.slug;
+const texteEvent = e => `${e.title} · ${dt(e.starts_at)}${e.venue ? " · " + e.venue : ""}. Réserve ton billet :`;
+function shareWhatsApp(e) { window.open("https://wa.me/?text=" + encodeURIComponent(texteEvent(e) + " " + lienEvent(e)), "_blank", "noopener"); }
+/* TikTok n'a pas de lien de partage pour un site : on copie le lien et on ouvre TikTok pour le coller (vidéo, description ou bio) */
+async function shareTikTok(e) {
+  const t = texteEvent(e) + " " + lienEvent(e);
+  try { await navigator.clipboard.writeText(t); toast("Lien copié ! Colle-le dans ta vidéo ou ta bio TikTok."); }
+  catch { toast("Copie ce lien : " + lienEvent(e)); }
+  setTimeout(() => window.open("https://www.tiktok.com/", "_blank", "noopener"), 900);
 }
 
 async function eventPage(slug, others) {
@@ -331,21 +337,19 @@ async function eventPage(slug, others) {
     ${e.dress_code ? `<div><dt>Dress code</dt><dd>${esc(e.dress_code)}</dd></div>` : ""}
     <div><dt>Accès</dt><dd>${esc(AUD[e.audience])}</dd></div>
     <div><dt>Places restantes</dt><dd>${left == null ? "—" : Math.max(0, left)}</dd></div></dl>
-    <div class="actions-ev rv"><button type="button" id="ics">📅 Ajouter à mon agenda</button><button type="button" id="share">↗ Partager</button></div>
+    <div class="partage rv"><span>Partager</span><button type="button" id="sh-wa" class="rond wa" aria-label="Partager sur WhatsApp" title="WhatsApp">${ICON_WA}</button><button type="button" id="sh-tt" class="rond tt" aria-label="Partager sur TikTok" title="TikTok">${ICON_TT}</button></div>
     ${galerie(e)}
     ${passe() ? "" : `<h2 class="rv">Les tarifs</h2>`}<div id="paliers" class="rv"${passe() ? " hidden" : ""}></div>
     ${passe() ? "" : `<h2 class="rv">Acheter un billet</h2>`}<div id="achat" class="rv"${passe() ? " hidden" : ""}></div>
-    ${passe() ? "" : faq(e)}
     ${others?.length ? `<h2 class="rv">Autres événements</h2>` + others.map(o => `<a class="carte ev rv" style="--ec:${esc(o.color)}" href="#/e/${esc(o.slug)}"><b>${esc(o.title)}</b><br>${dt(o.starts_at)} · ${esc(o.venue || "Lieu bientôt annoncé")}</a>`).join("") : ""}</div>`);
 
   if (passe()) {
-    $("ics").hidden = true;
     sb.from("events").select("slug,title,starts_at").eq("active", true).gt("starts_at", new Date().toISOString()).order("starts_at").limit(1).then(({ data: nx }) => {
       if ($("suite")) $("suite").innerHTML = nx?.[0] ? `<a class="btn plein" href="#/e/${esc(nx[0].slug)}">Prochain événement : ${esc(nx[0].title)}</a>` : `<p class="petit-texte">Le prochain événement sera annoncé bientôt.</p>`;
     });
   }
-  $("ics").onclick = () => addToCalendar(e);
-  $("share").onclick = () => shareEvent(e);
+  $("sh-wa").onclick = () => shareWhatsApp(e);
+  $("sh-tt").onclick = () => shareTikTok(e);
   if (others && welcome) splash(e);
   const prev = {}; let lastP;
   function tick() {
@@ -651,37 +655,6 @@ async function sendTicket(d, holder) {
     downloadTicket(d, holder); alert("Ce navigateur ne peut pas partager directement : le billet est téléchargé, envoie-le à ton ami.");
   } catch (e) { if (e && e.name === "AbortError") return; alert("Envoi impossible. Télécharge le billet puis envoie-le toi-même."); }
 }
-/* Affiche « J'y serai » à poster en statut */
-async function posterBlob(ev, name) {
-  await loadFonts();
-  const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d"), col = ev.color || "#ff6fae";
-  const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#150f3d"); g.addColorStop(1, "#0a0820"); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  const [cr, cg, cb] = mixHex(col, 1);
-  [[200, 300, 900, .55], [W - 100, 1100, 800, .35], [300, H - 100, 900, .4]].forEach(([px, py, rad, al], i) => { const r = x.createRadialGradient(px, py, 10, px, py, rad); r.addColorStop(0, i === 1 ? `rgba(124,92,255,${al})` : `rgba(${cr},${cg},${cb},${al})`); r.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = r; x.fillRect(0, 0, W, H); });
-  try { const lg = new Image(); lg.src = "logo.svg"; await lg.decode(); x.drawImage(lg, W / 2 - 90, 150, 180, 180); } catch {}
-  x.textAlign = "center"; x.fillStyle = "#d8d3f7"; x.font = "700 34px 'DM Sans', sans-serif"; if (x.letterSpacing !== undefined) x.letterSpacing = "8px"; x.fillText("IPNET EVENTS", W / 2, 420); if (x.letterSpacing !== undefined) x.letterSpacing = "0px";
-  const gt = x.createLinearGradient(0, 520, 0, 760); gt.addColorStop(0, "#ffffff"); gt.addColorStop(1, col); x.fillStyle = gt;
-  x.font = "800 190px 'Sora', sans-serif"; x.fillText("J'Y", W / 2, 640); x.fillText("SERAI", W / 2, 830);
-  x.fillStyle = "#ffffff"; let ns = 70; do { x.font = `800 ${ns}px 'Sora', sans-serif`; ns -= 2; } while (x.measureText(name).width > W - 200 && ns > 30);
-  roundRect(x, 90, 930, W - 180, 150, 75); x.fillStyle = "rgba(255,255,255,.12)"; x.fill(); x.strokeStyle = "rgba(255,255,255,.3)"; x.lineWidth = 3; x.stroke();
-  x.fillStyle = "#ffffff"; x.fillText(name, W / 2, 1030);
-  x.font = "800 80px 'Sora', sans-serif"; let ts = 80; do { x.font = `800 ${ts}px 'Sora', sans-serif`; ts -= 2; } while (x.measureText(ev.title).width > W - 160 && ts > 34);
-  x.fillStyle = col; x.fillText(ev.title, W / 2, 1260);
-  x.fillStyle = "#ffffff"; x.font = "500 44px 'DM Sans', sans-serif"; x.fillText(dt(ev.starts_at), W / 2, 1350);
-  if (ev.venue) { x.fillStyle = "#d8d3f7"; x.fillText(ev.venue, W / 2, 1420); }
-  roundRect(x, 190, 1560, W - 380, 120, 60); x.fillStyle = col; x.fill();
-  x.fillStyle = "#1a0b22"; x.font = "800 44px 'Sora', sans-serif"; x.fillText("Réserve ton billet", W / 2, 1635);
-  x.fillStyle = "#b8b3dd"; x.font = "500 32px 'DM Sans', sans-serif"; x.fillText(baseUrl().replace(/^https?:\/\//, ""), W / 2, 1760);
-  return await new Promise(res => c.toBlob(res, "image/png"));
-}
-async function sharePoster(ev, name) {
-  try {
-    const blob = await posterBlob(ev, name), file = new File([blob], "jy-serai.png", { type: "image/png" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: ev.title, text: `J'y serai ! ${ev.title}\n${baseUrl()}#/e/${ev.slug || ""}` }); return; }
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "jy-serai.png"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  } catch (e) { if (e && e.name === "AbortError") return; alert("Impossible de créer l'affiche. Réessaie."); }
-}
-
 /* ---------- Dashboard utilisateur ---------- */
 function ticketCard(t, o) {
   const ev = o.events || {}, porteur = t.holder_name || profile?.full_name || "";
@@ -739,8 +712,7 @@ async function mePage() {
       <p>${o.qty} billet(s) · ${fmt(o.total)} · ${dt(o.events.starts_at)}<br><span class="petit-texte">Commandé le ${dts(o.created_at)} · Code de commande ${esc(o.order_code)} · Référence ${esc(o.reference || "—")}</span></p>
       ${suivi(o)}
       ${o.status === "confirmed" ? `<div class="tks">${(o.tickets || []).map(t => ticketCard(t, o)).join("")}</div>
-        <p class="petit-texte" style="margin-top:.6rem">Un QR code par billet : il s'ouvre avec l'appareil photo du contrôleur et n'est valable qu'une seule fois.</p>
-        <div class="ligne g" style="margin-top:.6rem"><button class="petit" data-aff="${o.id}">Créer mon affiche « J'y serai »</button></div>` : ""}
+        <p class="petit-texte" style="margin-top:.6rem">Un QR code par billet : il s'ouvre avec l'appareil photo du contrôleur et n'est valable qu'une seule fois.</p>` : ""}
       ${o.status === "rejected" ? `<p>Paiement non reconnu. Vérifie le montant et recommence avec une capture claire.</p>` : ""}</div>`).join("")
       : `<p>Tu n'as pas encore de commande. <a href="#/">Voir les événements</a></p>`) + `</div>`);
   document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch (e) { i.replaceWith(document.createTextNode("QR indisponible : donne le code ci-dessous à l'entrée.")); } });
@@ -751,7 +723,6 @@ async function mePage() {
     const r = await rpc("set_ticket_name", { p_ticket: inp.dataset.nm, p_name: inp.value });
     if (st) st.textContent = r.error ? r.error : "Nom enregistré ✓";
   });
-  document.querySelectorAll("[data-aff]").forEach(btn => btn.onclick = () => { const o = (data || []).find(x => x.id === btn.dataset.aff); if (o) sharePoster(o.events, p.full_name || ""); });
   $("all").onclick = async () => { forgetTickets(); await sb.auth.signOut({ scope: "global" }); location.hash = "#/login"; };
   const zd = document.createElement("div"); zd.className = "wrap"; zd.style.marginTop = "0";
   zd.innerHTML = `<h2>Mes données</h2><div class="carte"><p class="petit-texte" style="margin-bottom:.8rem">Tu peux télécharger une copie de tes données, ou supprimer définitivement ton compte avec tes commandes, tes billets et tes captures de paiement. Les billets non utilisés ne seront plus valables.</p>
@@ -1176,7 +1147,7 @@ async function adminStats(box) {
     <div class="carte"><b>14 derniers jours</b><div style="margin-top:.8rem">` + d.jours.map(j => `<div class="ligne" style="gap:.6rem;margin:.3rem 0"><span class="petit-texte" style="min-width:5.5rem">${esc(j.d.slice(5).split("-").reverse().join("/"))}</span>
       <span style="flex:1;background:var(--glass);border-radius:.5rem;height:.9rem;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(j.vues / max * 100)}%;background:linear-gradient(90deg,var(--c),#7c5cff)"></i></span>
       <span class="petit-texte" style="min-width:8rem;text-align:right">${n(j.visiteurs)} visiteur(s) · ${n(j.vues)} vue(s)</span></div>`).join("") + `</div></div>
-    <div class="carte"><b>Pages les plus vues (30 jours)</b><div style="margin-top:.6rem">` + (d.pages.length ? d.pages.map(p => `<div class="ligne" style="margin:.3rem 0"><span>${esc(p.page === "/" ? "Accueil" : p.page.startsWith("/e/") ? "Événement : " + p.page.slice(3) : { "/login": "Connexion", "/me": "Mes billets", "/t": "Page d'un billet" }[p.page] || p.page)}</span><span class="petit-texte">${n(p.visiteurs)} visiteur(s) · ${n(p.vues)} vue(s)</span></div>`).join("") : `<p class="petit-texte">Pas encore de données.</p>`) + `</div></div>
+    <div class="carte"><b>Pages les plus vues (30 jours)</b><div style="margin-top:.6rem">` + (d.pages.length ? d.pages.map(p => `<div class="ligne" style="margin:.3rem 0"><span>${esc(p.page === "/" ? "Accueil" : p.page.startsWith("/e/") ? "Événement : " + p.page.slice(3) : { "/login": "Connexion", "/me": "Mes billets", "/aide": "Aide", "/t": "Page d'un billet" }[p.page] || p.page)}</span><span class="petit-texte">${n(p.visiteurs)} visiteur(s) · ${n(p.vues)} vue(s)</span></div>`).join("") : `<p class="petit-texte">Pas encore de données.</p>`) + `</div></div>
     <p class="petit-texte">Statistiques anonymes : un identifiant aléatoire par navigateur, sans nom ni adresse IP. Une même personne qui change de téléphone ou vide son navigateur est comptée deux fois. Les pages d'administration ne sont pas comptées.</p>`;
 }
 
