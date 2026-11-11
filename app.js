@@ -82,7 +82,10 @@ const io = ("IntersectionObserver" in window && !REDUCE)
   ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("vu"); io.unobserve(e.target); } }), { threshold: .12 })
   : null;
 function observeReveal() { document.querySelectorAll(".rv:not(.vu)").forEach(el => io ? io.observe(el) : el.classList.add("vu")); }
+let ldTimer = null, ctaIO = null;
+const LOADER = `<div class="chargement" role="status" aria-label="Chargement"><img src="logo.svg" alt="" width="96" height="96"><p>Chargement…</p></div>`;
 function show(html) {
+  clearTimeout(ldTimer);
   app.innerHTML = html;
   app.classList.remove("ecran"); void app.offsetWidth; app.classList.add("ecran");
   observeReveal();
@@ -142,7 +145,9 @@ setInterval(() => { if (!document.hidden) track(true); }, 60000);
 /* ---------- Routage ---------- */
 async function route() {
   const my = ++rid;
+  clearTimeout(ldTimer); ldTimer = setTimeout(() => { if (my === rid) app.innerHTML = LOADER; }, 400);
   clearInterval(timer); clearTimeout(bgTimer); stopIdle(); stopCam();
+  document.querySelectorAll(".cta-fixe").forEach(b => b.remove()); if (ctaIO) { ctaIO.disconnect(); ctaIO = null; }
   document.documentElement.style.setProperty("--c", "#ff6fae");
   document.title = SITE_NAME;
   setBg(null);
@@ -161,11 +166,14 @@ async function route() {
   }
   if (my !== rid) return;
 
+  const clair = document.documentElement.getAttribute("data-theme") === "light", grand = document.documentElement.hasAttribute("data-big");
   $("nav").innerHTML = `<b><a href="#/" class="marque">${logo()}<span>${esc(SITE_NAME)}</span></a></b><span>` +
     (me ? `<a href="#/me">Mes billets</a>${profile?.role === "admin" ? `<a href="#/admin">Admin</a>` : ""}<a href="#" id="out">Déconnexion</a>`
-        : `<a href="#/login">Connexion</a>`) + `</span>`;
+        : `<a href="#/login">Connexion</a>`) + `<button type="button" class="icone" id="th" aria-label="Changer entre thème clair et sombre" title="Thème">${clair ? "☾" : "☀"}</button><button type="button" class="icone" id="gt" aria-label="Agrandir le texte" aria-pressed="${grand}" title="Texte plus grand">A+</button></span>`;
+  $("th").onclick = () => { const n = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"; document.documentElement.setAttribute("data-theme", n); try { localStorage.setItem("theme", n); } catch {} $("th").textContent = n === "light" ? "☾" : "☀"; };
+  $("gt").onclick = () => { const on = !document.documentElement.hasAttribute("data-big"); if (on) document.documentElement.setAttribute("data-big", "1"); else document.documentElement.removeAttribute("data-big"); try { localStorage.setItem("big", on ? "1" : "0"); } catch {} $("gt").setAttribute("aria-pressed", on); };
   document.querySelectorAll('#nav a[href^="#/"]').forEach(l => l.addEventListener("click", () => { if (l.getAttribute("href") === location.hash) route(); }));
-  if ($("out")) $("out").onclick = async e => { e.preventDefault(); await sb.auth.signOut(); location.hash = "#/"; };
+  if ($("out")) $("out").onclick = async e => { e.preventDefault(); forgetTickets(); await sb.auth.signOut(); location.hash = "#/"; };
 
   const [, a, b] = location.hash.split("/");
   track(false);
@@ -187,6 +195,7 @@ async function route() {
   return home();
 }
 addEventListener("hashchange", route);
+if ("serviceWorker" in navigator && location.protocol === "https:") addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 sb.auth.onAuthStateChange((ev, s) => {
   if (ev === "PASSWORD_RECOVERY") { if (!resetBusy) { location.hash = "#/reset"; route(); } return; }
   if (ev === "INITIAL_SESSION") { route(); return; }
@@ -263,6 +272,30 @@ function eligible(e, p) {
 }
 const genCode = () => "IPN-" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, "0");
 
+/* Galerie d'ambiance : les images et vidéos de fond de l'événement */
+function galerie(e) {
+  const ok = u => typeof u === "string" && /^https:\/\/[a-z0-9-]+\.supabase\.co\//.test(u);
+  const items = (Array.isArray(e.bg_media) ? e.bg_media : []).filter(m => m && ok(m.url) && (m.kind === "image" || m.kind === "video")).slice(0, 8);
+  if (!items.length) return "";
+  return `<h2 class="rv">Ambiance</h2><div class="galerie rv" tabindex="0" aria-label="Photos et vidéos de l'événement">` + items.map(m => m.kind === "video"
+    ? `<video src="${esc(m.url)}" muted playsinline controls preload="metadata"></video>`
+    : `<img src="${esc(m.url)}" alt="Ambiance de ${esc(e.title)}" loading="lazy">`).join("") + `</div>`;
+}
+const icsEsc = t => String(t || "").replace(/\\/g, "\\\\").replace(/[,;]/g, m => "\\" + m).replace(/\r?\n/g, "\\n");
+function addToCalendar(e) {
+  const f = d => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const start = Date.parse(e.starts_at), end = start + 5 * 36e5;
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//IPNET Events//FR", "CALSCALE:GREGORIAN", "BEGIN:VEVENT", `UID:${e.id}@ipnet-events`, `DTSTAMP:${f(Date.now())}`,
+    `DTSTART:${f(start)}`, `DTEND:${f(end)}`, `SUMMARY:${icsEsc(e.title)}`, e.venue ? `LOCATION:${icsEsc(e.venue)}` : "", `DESCRIPTION:${icsEsc((e.tagline ? e.tagline + "\n" : "") + (e.dress_code ? "Dress code : " + e.dress_code + "\n" : "") + baseUrl() + "#/e/" + e.slug)}`,
+    "BEGIN:VALARM", "TRIGGER:-PT2H", "ACTION:DISPLAY", "DESCRIPTION:Rappel", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].filter(Boolean);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" })); a.download = `${e.slug}.ics`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function shareEvent(e) {
+  const url = baseUrl() + "#/e/" + e.slug, text = `${e.title} · ${dt(e.starts_at)}${e.venue ? " · " + e.venue : ""}. Réserve ton billet :`;
+  if (navigator.share) { try { await navigator.share({ title: e.title, text, url }); return; } catch (err) { if (err && err.name === "AbortError") return; } }
+  window.open("https://wa.me/?text=" + encodeURIComponent(text + " " + url), "_blank", "noopener");
+}
+
 async function eventPage(slug, others) {
   const { data: e } = await sb.from("events").select("*").eq("slug", slug || "").maybeSingle();
   if (!e) { show(`<div class="wrap"><h1 class="mini">Introuvable</h1><p>Cet événement n'existe pas.</p></div>`); return; }
@@ -281,10 +314,14 @@ async function eventPage(slug, others) {
     ${e.dress_code ? `<div><dt>Dress code</dt><dd>${esc(e.dress_code)}</dd></div>` : ""}
     <div><dt>Accès</dt><dd>${esc(AUD[e.audience])}</dd></div>
     <div><dt>Places restantes</dt><dd>${left == null ? "—" : Math.max(0, left)}</dd></div></dl>
+    <div class="actions-ev rv"><button type="button" id="ics">📅 Ajouter à mon agenda</button><button type="button" id="share">↗ Partager</button></div>
+    ${galerie(e)}
     <h2 class="rv">Les tarifs</h2><div id="paliers" class="rv"></div>
     <h2 class="rv">Acheter un billet</h2><div id="achat" class="rv"></div>
     ${others?.length ? `<h2 class="rv">Autres événements</h2>` + others.map(o => `<a class="carte ev rv" style="--ec:${esc(o.color)}" href="#/e/${esc(o.slug)}"><b>${esc(o.title)}</b><br>${dt(o.starts_at)} · ${esc(o.venue || "Lieu bientôt annoncé")}</a>`).join("") : ""}</div>`);
 
+  $("ics").onclick = () => addToCalendar(e);
+  $("share").onclick = () => shareEvent(e);
   if (others && welcome) splash(e);
   const prev = {}; let lastP;
   function tick() {
@@ -361,10 +398,21 @@ async function eventPage(slug, others) {
       return fail(r.error);
     }
     notice = "Commande envoyée ! Elle passera en « Confirmé » dès que l'administrateur aura vérifié ton paiement.";
+    try { bip(true); } catch {}
     confetti(); location.hash = "#/me";
   };
   }
   renderAchat(); lastKey = key();
+
+  /* Bouton « Réserver » fixe (téléphone) tant que la zone d'achat n'est pas à l'écran */
+  const cta = document.createElement("button"); cta.type = "button"; cta.className = "cta-fixe plein"; cta.textContent = "Réserver ma place";
+  document.body.appendChild(cta);
+  let vue = false;
+  const majCta = () => cta.classList.toggle("on", ouvert() && !fini() && !vue);
+  cta.onclick = () => $("achat").scrollIntoView({ behavior: REDUCE ? "auto" : "smooth", block: "start" });
+  if ("IntersectionObserver" in window) { ctaIO = new IntersectionObserver(en => { vue = en[0].isIntersecting; majCta(); }, { rootMargin: "0px 0px -15% 0px" }); ctaIO.observe($("achat")); }
+  const tick1 = tick; tick = function () { tick1(); majCta(); };
+  clearInterval(timer); timer = setInterval(tick, 1000); majCta();
 }
 
 /* ---------- Connexion / inscription / mot de passe oublié ---------- */
@@ -534,10 +582,33 @@ async function downloadTicket(d, holder) {
 }
 
 /* ---------- Dashboard utilisateur ---------- */
+function ticketCard(t, o) {
+  const ev = o.events || {};
+  return `<div class="tk ${esc(t.status)}"><div class="tk-main"><span class="tk-ev">${esc(ev.title)}</span><span class="tk-date">${dt(ev.starts_at)}</span>${ev.venue ? `<span class="tk-lieu">${esc(ev.venue)}</span>` : ""}
+    <span class="tk-code">${esc(t.code)}</span><span class="badge ${esc(t.status)}">${BILLET[t.status] || esc(t.status)}</span>${t.status === "used" && t.used_at ? `<span class="petit-texte">Entrée le ${dts(t.used_at)}</span>` : ""}</div>
+    <div class="tk-sep"></div><div class="tk-qr">${t.status === "valid"
+      ? `<div class="qr"><img alt="QR code du billet" width="170" height="170" data-qr="${esc(ticketUrl(t.code))}"></div><button class="petit" data-dl="${esc(t.code)}" data-ev="${esc(ev.title)}" data-when="${esc(ev.starts_at)}" data-venue="${esc(ev.venue || "")}">Télécharger</button>`
+      : `<p class="vide">${t.status === "used" ? "Ce billet a déjà servi." : "Ce billet est annulé."}</p>`}</div></div>`;
+}
+/* Copie des billets valides sur l'appareil, pour les afficher sans connexion à l'entrée */
+const SAVED = "billets-hors-ligne";
+const saveTickets = list => { try { localStorage.setItem(SAVED, JSON.stringify(list)); } catch {} };
+const forgetTickets = () => { try { localStorage.removeItem(SAVED); } catch {} };
+const savedTickets = () => { try { return JSON.parse(localStorage.getItem(SAVED) || "[]"); } catch { return []; } };
 async function mePage() {
   if (!me) { location.hash = "#/login"; return; }
   const { data, error: errO } = await sb.from("orders").select("*, events(title,starts_at,venue), tickets(id,code,status,used_at)").eq("user_id", me.id).order("created_at", { ascending: false });
   const p = profile || {};
+  if (errO && !data) {
+    const sv = savedTickets().filter(t => t.uid === me.id);
+    if (sv.length) {
+      show(`<div class="wrap"><h1 class="mini">Mes billets</h1><br>${flash("Pas de connexion : voici tes billets enregistrés sur cet appareil.")}<div class="tks">` +
+        sv.map(t => ticketCard({ code: t.code, status: "valid" }, { events: { title: t.title, starts_at: t.when, venue: t.venue } })).join("") + `</div></div>`);
+      document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch {} });
+      return;
+    }
+  }
+  if (!errO && data) saveTickets(data.flatMap(o => (o.tickets || []).filter(t => t.status === "valid").map(t => ({ uid: me.id, code: t.code, title: o.events?.title, when: o.events?.starts_at, venue: o.events?.venue }))));
   const n = notice; notice = "";
   show(`<div class="wrap"><h1 class="mini">Bonjour ${esc(p.first_name || "")}</h1><br>${n ? flash(n, true) : ""}
     <div class="carte"><div class="ligne"><span><b>${esc(p.full_name || "")}</b> · ${esc(TYPES[p.account_type] || "")}</span></div>
@@ -546,14 +617,13 @@ async function mePage() {
     <h2>Mes commandes et mes billets</h2>${errO ? flash("Impossible de charger tes commandes : " + (errO.message || "erreur")) : ""}` +
     (data?.length ? data.map(o => `<div class="carte rv"><div class="ligne"><b>${esc(o.events.title)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
       <p>${o.qty} billet(s) · ${fmt(o.total)} · ${dt(o.events.starts_at)}<br><span class="petit-texte">Commandé le ${dts(o.created_at)} · Code de commande ${esc(o.order_code)} · Référence ${esc(o.reference || "—")}</span></p>
-      ${o.status === "confirmed" ? `<div class="billets">${(o.tickets || []).map(t => `<div class="billet ${t.status}">${t.status === "valid" ? `<div class="qr"><img alt="QR code du billet" width="180" height="180" data-qr="${esc(ticketUrl(t.code))}"></div>` : ""}
-        <div><b>${esc(t.code)}</b></div><span class="badge ${t.status}">${BILLET[t.status]}</span>${t.status === "used" && t.used_at ? `<br><span class="petit-texte">Entrée le ${dts(t.used_at)}</span>` : ""}${t.status === "valid" ? `<br><button class="petit" style="margin-top:.5rem" data-dl="${esc(t.code)}" data-ev="${esc(o.events.title)}" data-when="${esc(o.events.starts_at)}" data-venue="${esc(o.events.venue || "")}">Télécharger</button>` : ""}</div>`).join("")}</div>
+      ${o.status === "confirmed" ? `<div class="tks">${(o.tickets || []).map(t => ticketCard(t, o)).join("")}</div>
         <p class="petit-texte" style="margin-top:.6rem">Un QR code par billet : il s'ouvre avec l'appareil photo du contrôleur et n'est valable qu'une seule fois.</p>` : ""}
       ${o.status === "rejected" ? `<p>Paiement non reconnu. Vérifie le montant et recommence avec une capture claire.</p>` : ""}</div>`).join("")
       : `<p>Tu n'as pas encore de commande. <a href="#/">Voir les événements</a></p>`) + `</div>`);
   document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch (e) { i.replaceWith(document.createTextNode("QR indisponible : donne le code ci-dessous à l'entrée.")); } });
   document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => downloadTicket(btn.dataset, p.full_name || ""));
-  $("all").onclick = async () => { await sb.auth.signOut({ scope: "global" }); location.hash = "#/login"; };
+  $("all").onclick = async () => { forgetTickets(); await sb.auth.signOut({ scope: "global" }); location.hash = "#/login"; };
   const zd = document.createElement("div"); zd.className = "wrap"; zd.style.marginTop = "0";
   zd.innerHTML = `<h2>Mes données</h2><div class="carte"><p class="petit-texte" style="margin-bottom:.8rem">Tu peux télécharger une copie de tes données, ou supprimer définitivement ton compte avec tes commandes, tes billets et tes captures de paiement. Les billets non utilisés ne seront plus valables.</p>
     <div class="ligne g"><button class="petit" id="exp">Télécharger mes données</button></div>
@@ -573,7 +643,7 @@ async function mePage() {
     if (paths.length) await sb.storage.from("proofs").remove(paths).catch(() => {});
     const r = await rpc("delete_my_account", {});
     if (r.error) { $("del").disabled = false; return out.innerHTML = flash(r.error); }
-    await sb.auth.signOut().catch(() => {});
+    forgetTickets(); await sb.auth.signOut().catch(() => {});
     notice = "";
     location.hash = "#/"; route();
   };
