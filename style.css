@@ -244,8 +244,6 @@ nav .icone{margin-left:.7rem;padding:.3rem .7rem;font-size:.9rem;line-height:1.3
 nav .icone:hover{color:var(--tx);transform:none}
 
 /* --- Grand texte --- */
-:root[data-big="1"]{font-size:118%}
-:root[data-big="1"] .petit-texte{font-size:1rem}
 
 /* --- Thème clair --- */
 :root[data-theme="light"]{--bg:#f7f4ff;--tx:#1d1646;--mu:#5d5689;--glass:rgba(255,255,255,.74);--bord:rgba(50,40,120,.17);color-scheme:light}
@@ -377,3 +375,22 @@ nav .aide-nav{display:inline-flex;flex-direction:column;align-items:center;gap:.
 nav .aide-nav i{font-style:normal;width:1.5rem;height:1.5rem;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.95rem;color:var(--tx);border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 22%,transparent)}
 nav .aide-nav span{font-size:.62rem;font-weight:700;letter-spacing:.04em}
 nav .aide-nav:hover i{background:var(--c);color:#1a0b22}
+
+/* Partage : petites icônes de réseaux */
+.partage{flex-wrap:wrap;gap:.5rem}
+.partage>span{margin-right:.3rem}
+.partage .rond{width:2.5rem;height:2.5rem}
+.partage .rond svg{width:20px;height:20px}
+
+/* Tarifs : le prix en grand */
+.tarifs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem}
+.tarif{position:relative;display:flex;flex-direction:column;gap:.15rem;padding:1.2rem 1.3rem;border-radius:1.3rem;background:var(--glass);border:1px solid var(--bord);overflow:hidden}
+.tarif .etat{font-size:.72rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--mu)}
+.tarif b{font-family:'Sora',sans-serif;font-size:2rem;line-height:1.15;letter-spacing:-.02em}
+.tarif .jusque{font-size:.85rem;color:var(--mu)}
+.tarif.actif{border-color:var(--c);background:linear-gradient(135deg,color-mix(in srgb,var(--c) 34%,transparent),rgba(124,92,255,.2));box-shadow:0 0 0 1px var(--c),0 16px 44px -16px var(--c)}
+.tarif.actif .etat{color:var(--c)}
+.tarif.actif .etat::before{content:"";display:inline-block;width:.5rem;height:.5rem;border-radius:50%;background:var(--c);margin-right:.45rem;box-shadow:0 0 10px var(--c)}
+.tarif.passe{opacity:.45}.tarif.passe b{text-decoration:line-through;text-decoration-thickness:2px}
+.tarif.futur{border-style:dashed}
+@media (max-width:480px){.tarifs{grid-template-columns:1fr}.tarif b{font-size:1.8rem}}
