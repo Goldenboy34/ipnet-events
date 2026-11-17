@@ -1,0 +1,13 @@
+{
+  "name": "IPNET Events",
+  "short_name": "IPNET Events",
+  "description": "Billetterie en ligne des événements du campus IPNET",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0820",
+  "theme_color": "#0a0820",
+  "icons": [
+    { "src": "logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
