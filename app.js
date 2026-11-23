@@ -845,7 +845,7 @@ function controlPage() {
 
 async function adminOrders(box) {
   const [{ data: all, error: oerr }, { data: evs }] = await Promise.all([
-    sb.from("orders").select("*, events(title), profiles!orders_user_id_fkey(full_name,phone,account_type), tickets(id,code,status,used_at,kind)").order("created_at", { ascending: false }).limit(2000),
+    sb.from("orders").select("*, events(title,starts_at,venue), profiles!orders_user_id_fkey(full_name,first_name,phone,account_type), tickets(id,code,status,used_at,kind)").order("created_at", { ascending: false }).limit(2000),
     sb.from("events").select("id,title,capacity,starts_at,active").order("starts_at", { ascending: false })
   ]);
   if (oerr) { box.innerHTML = flash("Impossible de charger les commandes : " + oerr.message); return; }
@@ -906,10 +906,24 @@ async function adminOrders(box) {
     let num = String(o.profiles?.phone || "").replace(/\D/g, "").replace(/^00/, "");
     if (num.length === 8) num = "228" + num;
     if (num.length < 10) return alert("Le numéro de ce compte est invalide, impossible d'ouvrir WhatsApp.");
-    const ev = o.events?.title || "l'événement", nom = o.profiles?.full_name || "";
+    /* Emojis écrits en codes Unicode : ils s'affichent pareil sur tous les téléphones, quel que soit l'encodage du fichier */
+    const E = { wave: "\u{1F44B}", ok: "\u2705", ticket: "\u{1F39F}\uFE0F", star: "\u2728", cal: "\u{1F4C5}", pin: "\u{1F4CD}", group: "\u{1F465}", party: "\u{1F389}", sad: "\u{1F615}", pray: "\u{1F64F}" };
+    const ev = o.events?.title || "l'événement", prenom = o.profiles?.first_name || o.profiles?.full_name || "";
+    const quand = o.events?.starts_at ? dt(o.events.starts_at).replace(/^./, c => c.toUpperCase()) : "", lieu = o.events?.venue || "";
+    const n = o.qty, un = n === 1;
     const msg = o.status === "confirmed"
-      ? `Bonjour ${nom}, ton paiement pour ${ev} est bien vérifié ✅\nTes ${o.qty} billet(s)${o.ticket_type ? " " + o.ticket_type : ""} sont prêts. Ouvre « Mes billets » pour les voir et les télécharger : ${baseUrl()}#/me\nÀ bientôt !`
-      : `Bonjour ${nom}, nous n'avons pas pu vérifier ton paiement pour ${ev} (commande ${o.order_code}). Contacte-nous ou refais ta commande sur ${baseUrl()}`;
+      ? [`Bonjour ${prenom} ${E.wave}`, "", `Bonne nouvelle : ton paiement est bien vérifié ${E.ok}`, "",
+          `${E.ticket} *${n} billet${un ? "" : "s"}${o.ticket_type ? " " + o.ticket_type : ""}*`, `${E.star} *${ev}*`,
+          ...(quand ? [`${E.cal} ${quand}`] : []), ...(lieu ? [`${E.pin} ${lieu}`] : []), "",
+          `${un ? "Ton billet est prêt. Retrouve-le" : "Tes billets sont prêts. Retrouve-les"} dans « Mes billets » pour ${un ? "le voir et le télécharger" : "les voir et les télécharger"} :`,
+          `${baseUrl()}#/me`, "",
+          ...(un ? ["Présente son QR code à l'entrée : il n'est valable qu'une seule fois."]
+                 : [`${E.group} Chaque billet a son propre QR code. Tu peux écrire le nom de chaque personne sur son billet, puis le lui envoyer directement avec le bouton « Envoyer ».`, "", "Chaque QR code n'est valable qu'une seule fois."]),
+          "", `À très vite ! ${E.party}`, "_L'équipe IPNET Events_"].join("\n")
+      : [`Bonjour ${prenom},`, "", `Nous n'avons malheureusement pas pu vérifier ton paiement pour *${ev}* (commande *${o.order_code}*). ${E.sad}`, "",
+          "Cela peut venir d'un montant incorrect, d'une référence erronée ou d'une capture illisible.", "",
+          "Tu peux refaire ta commande ici :", baseUrl(), "",
+          `Ou simplement répondre à ce message : on regarde ça ensemble. ${E.pray}`, "", "_L'équipe IPNET Events_"].join("\n");
     window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
   });
 }
