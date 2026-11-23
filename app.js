@@ -38,7 +38,7 @@ const ERR = {
   reserve_etudiants: "Cet événement est réservé aux étudiants.",
   quantite_invalide: "Quantité invalide (1 à 10).", trop_de_commandes_en_attente: "Tu as déjà 3 commandes en attente. Attends leur validation.",
   aucun_tarif: "Aucun tarif n'est actif aujourd'hui.", complet: "Plus assez de places disponibles.",
-  reference_invalide: "Référence de transaction invalide (6 à 40 lettres/chiffres).", numero_invalide: "Numéro Mixx by Yas invalide (8 chiffres).",
+  reference_invalide: "Référence de transaction invalide (6 à 40 lettres/chiffres).", numero_invalide: "Numéro de paiement invalide (8 chiffres).",
   code_invalide: "Code de commande invalide.", capture_invalide: "Capture de paiement invalide.",
   reference_deja_utilisee: "Cette référence de transaction a déjà servi pour une autre commande.",
   capture_deja_utilisee: "Cette capture a déjà été envoyée pour une autre commande.",
@@ -279,7 +279,7 @@ const genCode = () => "IPN-" + String(crypto.getRandomValues(new Uint32Array(1))
 
 /* Galerie d'ambiance : les images et vidéos de fond de l'événement */
 const FAQ = [
-  ["Comment payer ?", "Tu paies par Mixx by Yas au numéro affiché dans le formulaire d'achat. Tu notes ensuite la référence de la transaction (dans le SMS de confirmation) et tu envoies une capture d'écran du paiement."],
+  ["Comment payer ?", "Tu paies par Mixx by Yas ou par Moov, au numéro correspondant affiché dans le formulaire d'achat. Tu notes ensuite la référence de la transaction (dans le SMS de confirmation) et tu envoies une capture d'écran du paiement."],
   ["Quand est-ce que je reçois mon billet ?", "Dès que l'équipe a vérifié ton paiement. Tu suis l'avancement dans « Mes billets » : commande envoyée, vérification, billet prêt."],
   ["Mon paiement n'est pas validé, que faire ?", "Vérifie que le montant, la référence et la capture sont corrects. Une commande refusée peut être refaite avec une capture plus claire."],
   ["Comment entrer à l'événement ?", "Présente le QR code de ton billet (sur ton téléphone ou téléchargé). Chaque billet n'est valable qu'une seule fois."],
@@ -291,7 +291,7 @@ const FAQ = [
 function helpPage() {
   show(`<div class="wrap" style="max-width:720px"><h1 class="mini">Aide</h1><p class="sous" style="margin:.6rem 0 1.4rem">Les réponses aux questions les plus fréquentes.</p>
     <div class="faq">` + FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("") + `</div>
-    <h2>À propos</h2><div class="carte"><p><b>IPNET Events</b> est la billetterie en ligne des événements du campus de l'IPNET Institute of Technology : tu réserves ton billet, tu paies par Mixx by Yas et tu reçois un QR code personnel, valable une seule fois.</p>
+    <h2>À propos</h2><div class="carte"><p><b>IPNET Events</b> est la billetterie en ligne des événements du campus de l'IPNET Institute of Technology : tu réserves ton billet, tu paies par Mixx by Yas ou Moov et tu reçois un QR code personnel, valable une seule fois.</p>
     <p class="petit-texte" style="margin-top:.6rem">Tes données ne servent qu'à gérer tes billets. Tu peux les télécharger ou les supprimer à tout moment depuis « Mes billets ».</p></div>
     <div class="ligne g" style="margin-top:1.2rem"><a class="btn" href="#/">Retour aux événements</a></div></div>`);
 }
@@ -410,12 +410,16 @@ async function eventPage(slug, others) {
     <div class="etape"><span class="num">1</span><div><h3>Combien de billets ?</h3>
       <div class="stepper"><button type="button" id="mn" aria-label="Moins">−</button><input type="number" id="qty" min="1" max="10" value="1" required aria-label="Nombre de billets"><button type="button" id="pl" aria-label="Plus">+</button></div>
       <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte"></p></div></div>
-    <div class="etape"><span class="num">2</span><div><h3>Paie par Mixx by Yas</h3>
-      <img class="mixx" src="mixx.png" alt="Mixx by Yas" width="150" height="116">
-      <div class="paybox"><div><span class="petit-texte">Numéro à payer</span><br><b class="gros">${esc(e.pay_number)}</b></div><button type="button" class="petit" id="cp">Copier</button></div>
-      <p style="margin-top:.8rem">Code de commande : <b id="oc">${code}</b></p><p class="petit-texte">Écris-le dans le motif du paiement si Mixx by Yas le permet. Ton billet sera disponible après vérification.</p></div></div>
+    <div class="etape"><span class="num">2</span><div><h3>Paie par Mixx by Yas${e.pay_number_moov ? " ou Moov" : ""}</h3>
+      <div class="paygrid">
+        <div class="payop"><img class="mixx" src="mixx.png" alt="Mixx by Yas" width="150" height="116">
+          <div class="paybox"><div><span class="petit-texte">Numéro à payer</span><br><b class="gros">${esc(e.pay_number)}</b></div><button type="button" class="petit" id="cp">Copier</button></div></div>
+        ${e.pay_number_moov ? `<div class="payop"><img class="mixx" src="moov.png" alt="Moov" width="150" height="116">
+          <div class="paybox"><div><span class="petit-texte">Numéro à payer</span><br><b class="gros">${esc(e.pay_number_moov)}</b></div><button type="button" class="petit" id="cp2">Copier</button></div></div>` : ""}
+      </div>
+      <p style="margin-top:.8rem">Code de commande : <b id="oc">${code}</b></p><p class="petit-texte">Écris-le dans le motif du paiement si l'application le permet. Ton billet sera disponible après vérification.</p></div></div>
     <div class="etape"><span class="num">3</span><div><h3>Confirme ton paiement</h3>
-      <label>Numéro Mixx by Yas avec lequel tu as payé<input id="pn" type="tel" inputmode="numeric" placeholder="90123456" required></label>
+      <label>Numéro ${e.pay_number_moov ? "Mixx by Yas ou Moov" : "Mixx by Yas"} avec lequel tu as payé<input id="pn" type="tel" inputmode="numeric" placeholder="90123456" required></label>
       <label>Référence de la transaction (dans le SMS de confirmation)<input id="ref" required minlength="6" maxlength="40" autocomplete="off" placeholder="Ex : 7H3K29A1B4"></label>
       <label>Capture d'écran du paiement (JPG, PNG ou WebP, 5 Mo max)<input type="file" id="img" accept="image/jpeg,image/png,image/webp" required></label><div id="apercu" class="apercu"></div></div></div>
     <button class="plein large" id="go">Envoyer ma commande</button><div id="err" style="margin-top:1rem"></div></form>`;
@@ -423,6 +427,7 @@ async function eventPage(slug, others) {
   $("qty").oninput = () => { if ($("qty").value !== "") setQty(+$("qty").value || 1); };
   $("mn").onclick = () => setQty(+$("qty").value - 1); $("pl").onclick = () => setQty(+$("qty").value + 1);
   $("cp").onclick = async () => { try { await navigator.clipboard.writeText(e.pay_number); $("cp").textContent = "Copié ✓"; setTimeout(() => $("cp").textContent = "Copier", 1800); } catch { $("cp").textContent = "Copie à la main"; } };
+  if ($("cp2")) $("cp2").onclick = async () => { try { await navigator.clipboard.writeText(e.pay_number_moov); $("cp2").textContent = "Copié ✓"; setTimeout(() => $("cp2").textContent = "Copier", 1800); } catch { $("cp2").textContent = "Copie à la main"; } };
   $("img").onchange = () => { const f = $("img").files[0]; $("apercu").innerHTML = f && /^image\//.test(f.type) ? `<img src="${URL.createObjectURL(f)}" alt="Aperçu de la capture">` : ""; };
   $("f").onsubmit = async ev => {
     ev.preventDefault(); const go = $("go"); go.disabled = true; go.textContent = "Envoi…";
@@ -920,6 +925,7 @@ async function adminEvents(box, editId) {
     <div class="section">La vente</div>
     <div class="grille"><label>Numéro Mixx by Yas pour le paiement<input id="pay" required value="${val("pay_number")}" inputmode="numeric"></label>
     <label>Nombre de places<input id="cap" type="number" min="1" value="${ed?.capacity ?? 200}" required></label></div>
+    <label>Numéro Moov pour le paiement (facultatif)<input id="pay2" value="${val("pay_number_moov")}" inputmode="numeric"></label>
     <label>Qui peut acheter ?<select id="aud"><option value="all">Tout le monde (visiteurs et étudiants)</option><option value="students">Étudiants seulement</option></select></label>
     <label>Paliers de prix : une ligne par palier, au format prix;début;fin<textarea id="tiers" rows="3" placeholder="2000;2026-11-10;2026-11-20&#10;3000;2026-11-21;2026-12-05">${esc(tiersTxt)}</textarea></label>
     <div class="section">L'ambiance</div>
@@ -977,7 +983,7 @@ async function adminEvents(box, editId) {
     const btn = $("sv"); btn.disabled = true;
     const fail = m => { $("err").innerHTML = flash(m); btn.disabled = false; };
     const tiers = $("tiers").value.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const [prix, du, au] = l.split(";"); return { prix: +prix, du: (du || "").trim(), au: (au || "").trim() }; });
-    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", sales_close: $("sc").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, audience: $("aud").value, capacity: +$("cap").value, tiers };
+    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", sales_close: $("sc").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, pay_number_moov: $("pay2").value.trim() || null, audience: $("aud").value, capacity: +$("cap").value, tiers };
     const files = [...$("bg").files];
     if (medias.length + files.length > 8) return fail("8 fonds maximum : retire-en quelques-uns avant d'en ajouter.");
     const kinds = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm" };
