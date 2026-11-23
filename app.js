@@ -901,7 +901,7 @@ async function adminOrders(box) {
   box.querySelectorAll("[data-no]").forEach(b => b.onclick = () => { if (confirm("Refuser cette commande ?")) act("admin_decide_order", { p_order: b.dataset.no, p_decision: "reject" }); });
   box.querySelectorAll("[data-cancel]").forEach(b => b.onclick = () => { if (confirm("Annuler ce billet ? Il sera refusé à l'entrée.")) act("admin_cancel_ticket", { p_ticket: b.dataset.cancel }); });
   /* WhatsApp : ouvre la conversation avec le message déjà écrit, l'admin n'a plus qu'à envoyer */
-  box.querySelectorAll("[data-wa]").forEach(b => b.onclick = () => {
+  box.querySelectorAll("[data-wa]").forEach(b => b.onclick = async () => {
     const o = data.find(x => x.id === b.dataset.wa); if (!o) return;
     let num = String(o.profiles?.phone || "").replace(/\D/g, "").replace(/^00/, "");
     if (num.length === 8) num = "228" + num;
@@ -924,8 +924,16 @@ async function adminOrders(box) {
           "Cela peut venir d'un montant incorrect, d'une référence erronée ou d'une capture illisible.", "",
           "Tu peux refaire ta commande ici :", baseUrl(), "",
           `Ou simplement répondre à ce message : on regarde ça ensemble. ${E.pray}`, "", "_L'équipe IPNET Events_"].join("\n");
-    /* api.whatsapp.com et non wa.me : la redirection de wa.me transforme les emojis en � */
-    window.open(`https://api.whatsapp.com/send/?phone=${num}&text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+    /* Les liens WhatsApp abîment les emojis (�) : on copie le message tel quel et on ouvre la conversation, l'admin n'a qu'à coller */
+    let copie = false;
+    try { await navigator.clipboard.writeText(msg); copie = true; } catch {}
+    if (copie) {
+      toast("Message copié : dans WhatsApp, appuie longuement dans la zone de texte puis « Coller », et envoie.");
+      if (!window.open(`https://api.whatsapp.com/send/?phone=${num}`, "_blank", "noopener")) alert("Message copié. Ouvre WhatsApp et colle-le dans la conversation.");
+    } else {
+      const simple = msg.replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F]/gu, "").replace(/^ +/gm, "").replace(/ +$/gm, "");
+      window.open(`https://api.whatsapp.com/send/?phone=${num}&text=${encodeURIComponent(simple)}`, "_blank", "noopener");
+    }
   });
 }
 
