@@ -924,7 +924,8 @@ async function adminOrders(box) {
           "Cela peut venir d'un montant incorrect, d'une référence erronée ou d'une capture illisible.", "",
           "Tu peux refaire ta commande ici :", baseUrl(), "",
           `Ou simplement répondre à ce message : on regarde ça ensemble. ${E.pray}`, "", "_L'équipe IPNET Events_"].join("\n");
-    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+    /* api.whatsapp.com et non wa.me : la redirection de wa.me transforme les emojis en � */
+    window.open(`https://api.whatsapp.com/send/?phone=${num}&text=${encodeURIComponent(msg)}`, "_blank", "noopener");
   });
 }
 
