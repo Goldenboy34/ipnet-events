@@ -935,11 +935,11 @@ async function adminEvents(box, editId) {
     <label>Nombre de places<input id="cap" type="number" min="1" value="${ed?.capacity ?? 200}" required></label></div>
     <label>Numéro Moov pour le paiement (facultatif)<input id="pay2" value="${val("pay_number_moov")}" inputmode="numeric"></label>
     <label>Qui peut acheter ?<select id="aud"><option value="all">Tout le monde (visiteurs et étudiants)</option><option value="students">Étudiants seulement</option></select></label>
+    <p class="petit-texte" style="margin-bottom:.8rem">Un seul billet ? Remplis seulement le billet 1 (sans nom). Deux billets ? Donne le nom que tu veux à chacun : l'acheteur choisira l'un ou l'autre.</p>
+    <label>Nom du billet 1 (seulement s'il y a deux billets)<input id="n1" maxlength="30" value="${esc(ed?.types?.[0]?.name || "")}" placeholder="Ex : Soirée"></label>
     <label>Billet 1 (ou billet unique) : paliers de prix, une ligne par palier, au format prix;début;fin<textarea id="tiers" rows="3" placeholder="2000;2026-11-10;2026-11-20&#10;3000;2026-11-21;2026-12-05">${esc(tiersTxt)}</textarea></label>
-    <p class="petit-texte" style="margin-top:-.4rem;margin-bottom:1rem">Un seul billet ? Ne remplis que la case ci-dessus. Deux billets (ex : Standard et Premium) ? Donne un nom aux deux et remplis aussi les paliers du billet 2 : l'acheteur choisira l'un ou l'autre.</p>
-    <div class="grille"><label>Nom du billet 1 (si deux billets)<input id="n1" maxlength="30" value="${esc(ed?.types?.[0]?.name || "")}" placeholder="Standard"></label>
-    <label>Nom du billet 2<input id="n2" maxlength="30" value="${esc(ed?.types?.[1]?.name || "")}" placeholder="Premium"></label></div>
-    <label>Billet 2 (facultatif) : paliers de prix, même format<textarea id="tiers2" rows="3" placeholder="5000;2026-11-10;2026-11-20&#10;6000;2026-11-21;2026-12-05">${esc(tiers2Txt)}</textarea></label>
+    <label>Nom du billet 2 (facultatif)<input id="n2" maxlength="30" value="${esc(ed?.types?.[1]?.name || "")}" placeholder="Ex : After party"></label>
+    <label>Billet 2 : paliers de prix, même format<textarea id="tiers2" rows="3" placeholder="3000;2026-11-10;2026-11-20&#10;4000;2026-11-21;2026-12-05">${esc(tiers2Txt)}</textarea></label>
     <div class="section">L'ambiance</div>
     <label>Couleur principale de la page<input id="col" type="color" value="${esc(ed?.color || "#ff6fae")}"></label>
     <fieldset><legend>Fonds de la page : images et vidéos (8 maximum, elles défilent toutes seules)</legend>
@@ -1000,7 +1000,7 @@ async function adminEvents(box, editId) {
     if (tiers2.length || n2) { // deux billets : l'acheteur choisit l'un ou l'autre
       const okT = t => t.prix > 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.du) && /^\d{4}-\d{2}-\d{2}$/.test(t.au) && t.du <= t.au;
       if (!tiers2.length || !tiers2.every(okT)) return fail("Billet 2 : paliers au format prix;début;fin (ex : 5000;2026-11-10;2026-11-20), un par ligne.");
-      if (!n1 || !n2) return fail("Deux billets : donne un nom à chacun (ex : Standard et Premium).");
+      if (!n1 || !n2) return fail("Deux billets : donne un nom à chacun (ex : Soirée et After party).");
       if (n1.toLowerCase() === n2.toLowerCase() || /[<>]/.test(n1 + n2)) return fail("Les deux billets doivent avoir des noms différents (sans < ni >).");
       types = [{ name: n1, tiers }, { name: n2, tiers: tiers2 }];
     }
