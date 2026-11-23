@@ -394,3 +394,8 @@ nav .aide-nav:hover i{background:var(--c);color:#1a0b22}
 .tarif.passe{opacity:.45}.tarif.passe b{text-decoration:line-through;text-decoration-thickness:2px}
 .tarif.futur{border-style:dashed}
 @media (max-width:480px){.tarifs{grid-template-columns:1fr}.tarif b{font-size:1.8rem}}
+
+/* Paiement : Mixx by Yas + Moov côte à côte (s'empilent sur petit écran) */
+.paygrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-bottom:.4rem}
+.payop{display:flex;flex-direction:column;gap:.6rem}
+.payop img{height:64px;width:auto;max-width:100%;object-fit:contain;align-self:flex-start}
