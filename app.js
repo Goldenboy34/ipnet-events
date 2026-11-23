@@ -21,9 +21,6 @@ const dts = s => new Date(s).toLocaleString("fr-FR", { dateStyle: "short", timeS
 const flash = (t, ok) => `<div class="msg ${ok ? "ok" : ""}" role="alert">${esc(t)}</div>`;
 
 const STATUT = { pending: "En attente de validation", confirmed: "Confirmé", rejected: "Refusé" };
-const itemsOf = o => Array.isArray(o?.items) ? o.items : [];
-const nbBillets = o => (o.qty || 0) + itemsOf(o).reduce((n, x) => n + (x.qty || 0), 0);
-const resume = o => `${o.qty} billet(s)` + itemsOf(o).map(x => ` + ${x.qty} × ${x.name}`).join("");
 const BILLET = { valid: "Valide", used: "Utilisé", cancelled: "Annulé" };
 const TYPES = { visitor: "Visiteur", student: "Étudiant" };
 const AUD = { all: "Ouvert à tous", students: "Réservé aux étudiants" };
@@ -51,7 +48,7 @@ const ERR = {
   donnees_invalides: "Données invalides.", propre_compte: "Tu ne peux pas bloquer ton propre compte.",
   "rate limit": "Trop d'essais. Réessaie dans quelques minutes.", "over_email_send_rate_limit": "Trop d'emails demandés. Réessaie plus tard.",
   "captcha": "Le test anti-robot a échoué. Réessaie.",
-  extras_invalides: "Billets supplémentaires invalides. Actualise la page et réessaie."
+  type_invalide: "Ce billet n'existe plus. Actualise la page et réessaie."
 };
 const errMsg = e => {
   const m = String(e?.message || e || "").toLowerCase();
@@ -335,8 +332,7 @@ async function eventPage(slug, others) {
   setBg(e);
   document.title = e.title;
   const { data: left } = await sb.rpc("places_restantes", { p_event: e.id });
-  const tiers = e.tiers || [];
-  const extras = Array.isArray(e.extras) ? e.extras : [];
+  const types = Array.isArray(e.types) && e.types.length >= 2 ? e.types : [{ name: null, tiers: e.tiers || [] }], multi = types.length > 1;
   const passe = () => Date.now() >= Date.parse(e.starts_at);
   const ouvert = () => Date.now() >= Date.parse(e.sales_open), fini = () => Date.now() >= Date.parse(e.sales_close || e.starts_at);
   const parts = [["j", "jours"], ["h", "heures"], ["m", "min"], ["s", "sec"]];
@@ -353,7 +349,6 @@ async function eventPage(slug, others) {
     ${partageHtml()}
     ${galerie(e)}
     ${passe() ? "" : `<h2 class="rv">Les tarifs</h2>`}<div id="paliers" class="rv"${passe() ? " hidden" : ""}></div>
-    ${!passe() && extras.length ? `<h3 class="rv" style="margin:1.2rem 0 .6rem">Billets supplémentaires</h3><div class="tarifs rv vu">${extras.map(x => `<div class="tarif actif"><span class="etat">${esc(x.name)}</span><b>${fmt(x.prix)}</b></div>`).join("")}</div>` : ""}
     ${passe() ? "" : `<h2 class="rv">Acheter un billet</h2>`}<div id="achat" class="rv"${passe() ? " hidden" : ""}></div>
     ${others?.length ? `<h2 class="rv">Autres événements</h2>` + others.map(o => `<a class="carte ev rv" style="--ec:${esc(o.color)}" href="#/e/${esc(o.slug)}"><b>${esc(o.title)}</b><br>${dt(o.starts_at)} · ${esc(o.venue || "Lieu bientôt annoncé")}</a>`).join("") : ""}</div>`);
 
@@ -375,21 +370,23 @@ async function eventPage(slug, others) {
       const el = $("cp-" + k), t = String(v[k]);
       if (prev[k] !== t) { el.textContent = t; prev[k] = t; if (!REDUCE) { el.classList.remove("flip"); void el.offsetWidth; el.classList.add("flip"); } }
     });
-    const p = palierActuel(tiers);
-    $("phrase").textContent = passe() ? "Événement terminé" : fini() ? "La billetterie est fermée." : ouvert() ? (p ? `Billetterie ouverte · Tarif actuel : ${fmt(p.prix)}. Fin de la billetterie dans :` : "Billetterie ouverte, mais aucun tarif n'est actif aujourd'hui. Fin de la billetterie dans :") : "Ouverture de la billetterie dans :";
-    if (p !== lastP || lastP === undefined) {
-      lastP = p;
+    const ps = types.map(ty => palierActuel(ty.tiers)), p = ps.find(Boolean);
+    $("phrase").textContent = passe() ? "Événement terminé" : fini() ? "La billetterie est fermée." : ouvert() ? (p ? `Billetterie ouverte · ${multi ? types.map((ty, i) => ps[i] ? `${ty.name} : ${fmt(ps[i].prix)}` : "").filter(Boolean).join(" · ") : "Tarif actuel : " + fmt(p.prix)}. Fin de la billetterie dans :` : "Billetterie ouverte, mais aucun tarif n'est actif aujourd'hui. Fin de la billetterie dans :") : "Ouverture de la billetterie dans :";
+    const pk = ps.map(x => x?.du || "-").join("|");
+    if (pk !== lastP) {
+      lastP = pk;
       const jour = d => new Date(d + "T00:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
       const now = Date.now();
-      $("paliers").className = "tarifs rv vu";
-      $("paliers").innerHTML = tiers.map(t => {
-        const fin = now > Date.parse(t.au + "T23:59:59Z"), actif = t === p, futur = now < Date.parse(t.du + "T00:00:00Z");
+      const cards = (tt, pp) => tt.map(t => {
+        const fin = now > Date.parse(t.au + "T23:59:59Z"), actif = t === pp, futur = now < Date.parse(t.du + "T00:00:00Z");
         return `<div class="tarif ${actif ? "actif" : fin ? "passe" : "futur"}"><span class="etat">${actif ? "Tarif actuel" : fin ? "Terminé" : "À venir"}</span>
           <b>${fmt(t.prix)}</b><span class="jusque">${actif || !futur ? `jusqu'au ${jour(t.au)}` : `dès le ${jour(t.du)}`}</span></div>`;
       }).join("");
+      $("paliers").className = multi ? "rv vu" : "tarifs rv vu";
+      $("paliers").innerHTML = multi ? types.map((ty, i) => `<h3 style="margin:1rem 0 .5rem">${esc(ty.name)}</h3><div class="tarifs vu">${cards(ty.tiers, ps[i])}</div>`).join("") : cards(types[0].tiers, ps[0]);
     }
   }
-  const key = () => [fini(), ouvert(), palierActuel(tiers)?.du].join("|");
+  const key = () => [fini(), ouvert(), ...types.map(ty => palierActuel(ty.tiers)?.du)].join("|");
   let lastKey;
   const tick0 = tick;
   tick = function () { tick0(); if (lastKey !== undefined && key() !== lastKey) { lastKey = key(); renderAchat(); } };
@@ -397,7 +394,7 @@ async function eventPage(slug, others) {
 
   const zone = $("achat");
   function renderAchat() {
-  const p0 = palierActuel(tiers);
+  const ps0 = types.map(ty => palierActuel(ty.tiers)), p0 = ps0.find(Boolean);
   if (fini() || !ouvert() || !p0) { zone.innerHTML = `<p>${fini() ? "La billetterie est fermée : les ventes sont terminées." : "La vente n'est pas ouverte en ce moment."}</p>`.replace("La vente n'est pas ouverte en ce moment.", ouvert() && !p0 ? "Aucun tarif n'est actif aujourd'hui : l'organisateur doit vérifier les dates des paliers." : "La vente n'est pas ouverte en ce moment."); return; }
   if (left != null && left <= 0) { zone.innerHTML = `<p>Complet : il n'y a plus de places.</p>`; return; }
   const el = eligible(e, profile);
@@ -413,9 +410,8 @@ async function eventPage(slug, others) {
 
   let code = genCode();
   zone.innerHTML = `<form id="f" class="formcard">
-    <div class="etape"><span class="num">1</span><div><h3>Combien de billets ?</h3>
+    <div class="etape"><span class="num">1</span><div>${multi ? `<h3>Quel billet ?</h3><fieldset style="border:0;padding:0;margin:0 0 1.2rem">${types.map((ty, i) => `<label class="radio"><input type="radio" name="bt" value="${i}" ${ps0[i] ? "" : "disabled"} ${i === ps0.findIndex(Boolean) ? "checked" : ""}><b>${esc(ty.name)}</b> · ${ps0[i] ? fmt(ps0[i].prix) : "indisponible"}</label>`).join("")}</fieldset>` : ""}<h3>Combien de billets ?</h3>
       <div class="stepper"><button type="button" id="mn" aria-label="Moins">−</button><input type="number" id="qty" min="1" max="10" value="1" required aria-label="Nombre de billets"><button type="button" id="pl" aria-label="Plus">+</button></div>
-      ${extras.length ? `<h3 style="margin:1.2rem 0 .5rem">Billets supplémentaires (facultatif)</h3>` + extras.map((x, i) => `<div class="ligne" style="margin-bottom:.7rem"><span><b>${esc(x.name)}</b><br><span class="petit-texte">${fmt(x.prix)}</span></span><div class="stepper"><button type="button" data-xm="${i}" aria-label="Moins">−</button><input type="number" id="xq${i}" min="0" max="10" value="0" aria-label="${esc(x.name)}"><button type="button" data-xp="${i}" aria-label="Plus">+</button></div></div>`).join("") : ""}
       <p class="total">Total à payer <b id="tot">${fmt(p0.prix)}</b></p><p class="petit-texte"></p></div></div>
     <div class="etape"><span class="num">2</span><div><h3>Paie par Mixx by Yas${e.pay_number_moov ? " ou Moov" : ""}</h3>
       <div class="paygrid">
@@ -430,15 +426,10 @@ async function eventPage(slug, others) {
       <label>Référence de la transaction (dans le SMS de confirmation)<input id="ref" required minlength="6" maxlength="40" autocomplete="off" placeholder="Ex : 7H3K29A1B4"></label>
       <label>Capture d'écran du paiement (JPG, PNG ou WebP, 5 Mo max)<input type="file" id="img" accept="image/jpeg,image/png,image/webp" required></label><div id="apercu" class="apercu"></div></div></div>
     <button class="plein large" id="go">Envoyer ma commande</button><div id="err" style="margin-top:1rem"></div></form>`;
-  const xsel = () => extras.map((x, i) => ({ name: x.name, prix: x.prix, qty: Math.min(10, Math.max(0, +($("xq" + i)?.value) || 0)) })).filter(x => x.qty > 0);
-  const maj = () => { $("tot").textContent = fmt(p0.prix * (+$("qty").value || 1) + xsel().reduce((n, x) => n + x.prix * x.qty, 0)); };
-  const setQty = n => { $("qty").value = Math.min(10, Math.max(1, n)); maj(); };
-  extras.forEach((x, i) => {
-    const inp = $("xq" + i), set = n => { inp.value = Math.min(10, Math.max(0, n)); maj(); };
-    inp.oninput = () => { if (inp.value !== "") set(+inp.value || 0); };
-    document.querySelector(`[data-xm="${i}"]`).onclick = () => set(+inp.value - 1);
-    document.querySelector(`[data-xp="${i}"]`).onclick = () => set(+inp.value + 1);
-  });
+  const selI = () => multi ? +document.querySelector("input[name=bt]:checked").value : 0;
+  const prixSel = () => ps0[selI()].prix, typeSel = () => multi ? types[selI()].name : null;
+  const setQty = n => { $("qty").value = Math.min(10, Math.max(1, n)); $("tot").textContent = fmt(prixSel() * +$("qty").value); };
+  document.querySelectorAll("input[name=bt]").forEach(r => r.onchange = () => setQty(+$("qty").value || 1));
   $("qty").oninput = () => { if ($("qty").value !== "") setQty(+$("qty").value || 1); };
   $("mn").onclick = () => setQty(+$("qty").value - 1); $("pl").onclick = () => setQty(+$("qty").value + 1);
   $("cp").onclick = async () => { try { await navigator.clipboard.writeText(e.pay_number); $("cp").textContent = "Copié ✓"; setTimeout(() => $("cp").textContent = "Copier", 1800); } catch { $("cp").textContent = "Copie à la main"; } };
@@ -454,7 +445,7 @@ async function eventPage(slug, others) {
     const hash = await sha256(file);
     const up = await sb.storage.from("proofs").upload(path, file, { contentType: file.type, upsert: false });
     if (up.error) return fail("Échec de l'envoi de la capture. Réessaie.");
-    const r = await rpc("create_order", { p_event: e.id, p_qty: +$("qty").value, p_reference: $("ref").value, p_pay_phone: $("pn").value, p_proof_path: path, p_proof_hash: hash, p_order_code: code, p_extras: xsel().map(x => ({ name: x.name, qty: x.qty })) });
+    const r = await rpc("create_order", { p_event: e.id, p_qty: +$("qty").value, p_reference: $("ref").value, p_pay_phone: $("pn").value, p_proof_path: path, p_proof_hash: hash, p_order_code: code, p_type: typeSel() });
     if (r.error) {
       if (r.code === "code_deja_pris") { code = genCode(); $("oc").textContent = code; }
       return fail(r.error);
@@ -757,7 +748,7 @@ async function mePage() {
       <div class="ligne g" style="margin-top:.8rem"><button class="petit" id="all">Me déconnecter partout</button></div></div>
     ${rappel(data)}<h2>Mes commandes et mes billets</h2>${errO ? flash("Impossible de charger tes commandes : " + (errO.message || "erreur")) : ""}` +
     (data?.length ? data.map(o => `<div class="carte rv"><div class="ligne"><b>${esc(o.events.title)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
-      <p>${esc(resume(o))} · ${fmt(o.total)} · ${dt(o.events.starts_at)}<br><span class="petit-texte">Commandé le ${dts(o.created_at)} · Code de commande ${esc(o.order_code)} · Référence ${esc(o.reference || "—")}</span></p>
+      <p>${o.qty} billet(s)${o.ticket_type ? " " + esc(o.ticket_type) : ""} · ${fmt(o.total)} · ${dt(o.events.starts_at)}<br><span class="petit-texte">Commandé le ${dts(o.created_at)} · Code de commande ${esc(o.order_code)} · Référence ${esc(o.reference || "—")}</span></p>
       ${suivi(o)}
       ${o.status === "confirmed" ? `<div class="tks">${(o.tickets || []).map(t => ticketCard(t, o)).join("")}</div>
         <p class="petit-texte" style="margin-top:.6rem">Un QR code par billet : il s'ouvre avec l'appareil photo du contrôleur et n'est valable qu'une seule fois.</p>` : ""}
@@ -854,8 +845,8 @@ async function adminOrders(box) {
     `<div class="ligne g" style="margin:.4rem 0 1rem"><button class="petit" id="xls">Exporter les ventes (Excel)</button>${"Notification" in window && !notifOk ? `<button class="petit" id="notif">Activer les alertes de commande</button>` : `<span class="petit-texte">${notifOk ? "Alertes de commande actives tant que le site reste ouvert." : ""}</span>`}</div>
     <label>Afficher<select id="flt">${[["pending", "À valider"], ["confirmed", "Confirmées"], ["rejected", "Refusées"], ["all", "Toutes"]].map(([v, l]) => `<option value="${v}" ${ofilter === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>` +
     (list.length ? list.map(o => `<div class="carte"><div class="ligne"><b>${esc(o.profiles?.full_name)} · ${esc(o.profiles?.phone)}</b><span class="badge ${o.status}">${STATUT[o.status]}</span></div>
-      <p class="petit-texte">${esc(TYPES[o.profiles?.account_type])} · ${esc(o.events.title)} · ${esc(resume(o))}</p>
-      <div class="scroll"><table class="cmp"><tr><th>Montant à retrouver</th><td><b>${fmt(o.total)}</b> (${o.qty} × ${fmt(o.unit_price)}${itemsOf(o).map(x => ` + ${x.qty} × ${fmt(x.prix)} ${esc(x.name)}`).join("")})</td></tr>
+      <p class="petit-texte">${esc(TYPES[o.profiles?.account_type])} · ${esc(o.events.title)} · ${o.qty} billet(s)${o.ticket_type ? " " + esc(o.ticket_type) : ""}</p>
+      <div class="scroll"><table class="cmp"><tr><th>Montant à retrouver</th><td><b>${fmt(o.total)}</b> (${o.qty} × ${fmt(o.unit_price)})</td></tr>
         <tr><th>Référence Mixx by Yas</th><td>${esc(o.reference)}</td></tr><tr><th>Numéro payeur</th><td>${esc(o.pay_phone)}</td></tr>
         <tr><th>Heure de la commande</th><td>${dts(o.created_at)} (heure de Lomé)</td></tr><tr><th>Code de commande</th><td>${esc(o.order_code)}</td></tr></table></div>
       ${o.status === "pending" ? `<a class="preuve" data-proofimg="${esc(o.proof_path)}" href="#" aria-label="Agrandir la capture"><span class="petit-texte">Chargement de la capture…</span></a>` : ""}
@@ -867,9 +858,9 @@ async function adminOrders(box) {
   $("flt").onchange = () => { ofilter = $("flt").value; adminPage(); };
   if ($("notif")) $("notif").onclick = async () => { await Notification.requestPermission(); adminPage(); };
   $("xls").onclick = () => {
-    const rows = [["Date", "Événement", "Nom", "Téléphone", "Type de compte", "Billets", "Prix unitaire", "Total", "Statut", "Référence Mixx by Yas", "Numéro payeur", "Code de commande", "Codes des billets", "Billets utilisés", "Billets supplémentaires"]]
+    const rows = [["Date", "Événement", "Nom", "Téléphone", "Type de compte", "Billets", "Prix unitaire", "Total", "Statut", "Référence Mixx by Yas", "Numéro payeur", "Code de commande", "Codes des billets", "Billets utilisés", "Type de billet"]]
       .concat(data.map(o => [dts(o.created_at), o.events?.title, o.profiles?.full_name, o.profiles?.phone, TYPES[o.profiles?.account_type] || "", o.qty, o.unit_price, o.total, STATUT[o.status], o.reference, o.pay_phone, o.order_code,
-        (o.tickets || []).map(t => t.code).join(" "), (o.tickets || []).filter(t => t.status === "used").length, itemsOf(o).map(x => `${x.qty} × ${x.name}`).join(" + ")]));
+        (o.tickets || []).map(t => t.code).join(" "), (o.tickets || []).filter(t => t.status === "used").length, o.ticket_type || ""]));
     download(`ventes-ipnet-events-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   };
   const act = async (name, args, okMsg) => { const r = await rpc(name, args); if (r.error) alert(r.error); else if (okMsg === "confetti") confetti(); adminPage(); };
@@ -908,7 +899,7 @@ function watchOrders(on) {
   if (!on) { if (ordersChan) { sb.removeChannel(ordersChan); ordersChan = null; } return; }
   if (ordersChan) return;
   ordersChan = sb.channel("nouvelles-commandes").on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, p => {
-    const o = p.new || {}; const msg = `Nouvelle commande : ${nbBillets(o)} billet(s) · ${fmt(o.total)}`;
+    const o = p.new || {}; const msg = `Nouvelle commande : ${o.qty} billet(s) · ${fmt(o.total)}`;
     try { bip(true); } catch {}
     toast(msg);
     if ("Notification" in window && Notification.permission === "granted") { try { new Notification("IPNET Events", { body: msg, icon: "icon-192.png" }); } catch {} }
@@ -924,8 +915,8 @@ async function adminEvents(box, editId) {
   const { data } = await sb.from("events").select("*").order("starts_at", { ascending: false });
   const ed = editId ? (data || []).find(x => x.id === editId) : null;
   const loc = s => (s || "").slice(0, 16);
-  const extrasTxt = (ed?.extras || []).map(x => `${x.name};${x.prix}`).join("\n");
   const tiersTxt = (ed?.tiers || []).map(t => `${t.prix};${t.du};${t.au}`).join("\n");
+  const tiers2Txt = (ed?.types?.[1]?.tiers || []).map(t => `${t.prix};${t.du};${t.au}`).join("\n");
   const val = k => esc(ed?.[k] ?? "");
   let medias = ed ? (Array.isArray(ed.bg_media) && ed.bg_media.length ? ed.bg_media.slice() : (ed.bg_url ? [{ url: ed.bg_url, kind: ed.bg_kind }] : [])) : [];
   const removed = [];
@@ -944,8 +935,11 @@ async function adminEvents(box, editId) {
     <label>Nombre de places<input id="cap" type="number" min="1" value="${ed?.capacity ?? 200}" required></label></div>
     <label>Numéro Moov pour le paiement (facultatif)<input id="pay2" value="${val("pay_number_moov")}" inputmode="numeric"></label>
     <label>Qui peut acheter ?<select id="aud"><option value="all">Tout le monde (visiteurs et étudiants)</option><option value="students">Étudiants seulement</option></select></label>
-    <label>Paliers de prix : une ligne par palier, au format prix;début;fin<textarea id="tiers" rows="3" placeholder="2000;2026-11-10;2026-11-20&#10;3000;2026-11-21;2026-12-05">${esc(tiersTxt)}</textarea></label>
-    <label>Billets supplémentaires (facultatif) : une ligne par billet, au format nom;prix<textarea id="extras" rows="2" placeholder="After party;2000">${esc(extrasTxt)}</textarea></label>
+    <label>Billet 1 (ou billet unique) : paliers de prix, une ligne par palier, au format prix;début;fin<textarea id="tiers" rows="3" placeholder="2000;2026-11-10;2026-11-20&#10;3000;2026-11-21;2026-12-05">${esc(tiersTxt)}</textarea></label>
+    <p class="petit-texte" style="margin-top:-.4rem;margin-bottom:1rem">Un seul billet ? Ne remplis que la case ci-dessus. Deux billets (ex : Standard et Premium) ? Donne un nom aux deux et remplis aussi les paliers du billet 2 : l'acheteur choisira l'un ou l'autre.</p>
+    <div class="grille"><label>Nom du billet 1 (si deux billets)<input id="n1" maxlength="30" value="${esc(ed?.types?.[0]?.name || "")}" placeholder="Standard"></label>
+    <label>Nom du billet 2<input id="n2" maxlength="30" value="${esc(ed?.types?.[1]?.name || "")}" placeholder="Premium"></label></div>
+    <label>Billet 2 (facultatif) : paliers de prix, même format<textarea id="tiers2" rows="3" placeholder="5000;2026-11-10;2026-11-20&#10;6000;2026-11-21;2026-12-05">${esc(tiers2Txt)}</textarea></label>
     <div class="section">L'ambiance</div>
     <label>Couleur principale de la page<input id="col" type="color" value="${esc(ed?.color || "#ff6fae")}"></label>
     <fieldset><legend>Fonds de la page : images et vidéos (8 maximum, elles défilent toutes seules)</legend>
@@ -1000,15 +994,17 @@ async function adminEvents(box, editId) {
     ev.preventDefault();
     const btn = $("sv"); btn.disabled = true;
     const fail = m => { $("err").innerHTML = flash(m); btn.disabled = false; };
-    const tiers = $("tiers").value.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const [prix, du, au] = l.split(";"); return { prix: +prix, du: (du || "").trim(), au: (au || "").trim() }; });
-    const extras = [];
-    for (const l of $("extras").value.split("\n").map(l => l.trim()).filter(Boolean)) {
-      const i = l.lastIndexOf(";"), name = l.slice(0, i).trim(), prix = Math.round(+l.slice(i + 1));
-      if (i < 1 || !name || name.length > 40 || /[<>]/.test(name) || !(prix > 0)) return fail("Billets supplémentaires : une ligne par billet, au format nom;prix (ex : After party;2000).");
-      if (extras.some(x => x.name.toLowerCase() === name.toLowerCase())) return fail("Billets supplémentaires : deux billets ne peuvent pas avoir le même nom.");
-      extras.push({ name, prix });
+    const parseT = txt => txt.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const [prix, du, au] = l.split(";"); return { prix: +prix, du: (du || "").trim(), au: (au || "").trim() }; });
+    const tiers = parseT($("tiers").value), tiers2 = parseT($("tiers2").value), n1 = $("n1").value.trim(), n2 = $("n2").value.trim();
+    let types = [];
+    if (tiers2.length || n2) { // deux billets : l'acheteur choisit l'un ou l'autre
+      const okT = t => t.prix > 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.du) && /^\d{4}-\d{2}-\d{2}$/.test(t.au) && t.du <= t.au;
+      if (!tiers2.length || !tiers2.every(okT)) return fail("Billet 2 : paliers au format prix;début;fin (ex : 5000;2026-11-10;2026-11-20), un par ligne.");
+      if (!n1 || !n2) return fail("Deux billets : donne un nom à chacun (ex : Standard et Premium).");
+      if (n1.toLowerCase() === n2.toLowerCase() || /[<>]/.test(n1 + n2)) return fail("Les deux billets doivent avoir des noms différents (sans < ni >).");
+      types = [{ name: n1, tiers }, { name: n2, tiers: tiers2 }];
     }
-    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", sales_close: $("sc").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, pay_number_moov: $("pay2").value.trim() || null, audience: $("aud").value, capacity: +$("cap").value, tiers, extras };
+    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", sales_close: $("sc").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, pay_number_moov: $("pay2").value.trim() || null, audience: $("aud").value, capacity: +$("cap").value, tiers, types };
     const files = [...$("bg").files];
     if (medias.length + files.length > 8) return fail("8 fonds maximum : retire-en quelques-uns avant d'en ajouter.");
     const kinds = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm" };
