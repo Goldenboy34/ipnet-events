@@ -131,6 +131,8 @@ const pwOk = p => p.length >= 10 && /[a-z]/.test(p) && /[A-Z]/.test(p) && /[0-9]
 const normPhone = s => { const t = s.replace(/[\s.-]/g, ""); return /^[0-9]{8}$/.test(t) ? "+228" + t : t; };
 const baseUrl = () => location.origin + location.pathname;
 const ticketUrl = c => baseUrl() + "#/t/" + c;
+/* Lien carte : seulement https (jamais javascript:) */
+const mapsOk = u => /^https:\/\/[^\s<>"']+$/i.test(String(u || "").trim()) ? String(u).trim() : "";
 const codeOf = t => { const m = String(t).match(/#\/t\/([A-Za-z0-9]{8,40})/); return (m ? m[1] : String(t)).trim(); };
 let afterLogin = "", resetBusy = false;
 
@@ -342,7 +344,7 @@ async function eventPage(slug, others) {
     <div class="compte"${passe() ? " hidden" : ""}>${parts.map(([k, l]) => `<div><b id="cp-${k}">0</b>${l}</div>`).join("")}</div><p class="quand">${dt(e.starts_at)}</p>
     ${passe() ? `<div class="merci"><b>Merci d'être venu !</b><p>L'événement est terminé. On espère que tu t'es bien amusé.</p><div id="suite"></div></div>`
       : `<a class="btn plein grand" id="herocta" href="#achat" hidden>Réserver ma place</a>`}</div></div>
-    <div class="wrap"><dl class="infos rv"><div><dt>Lieu</dt><dd>${esc(e.venue || "Bientôt annoncé")}</dd></div>
+    <div class="wrap"><dl class="infos rv"><div><dt>Lieu</dt><dd>${esc(e.venue || "Bientôt annoncé")}${mapsOk(e.maps_url) ? `<br><a href="${esc(mapsOk(e.maps_url))}" target="_blank" rel="noopener noreferrer">📍 Voir sur la carte</a>` : ""}</dd></div>
     ${e.dress_code ? `<div><dt>Dress code</dt><dd>${esc(e.dress_code)}</dd></div>` : ""}
     <div><dt>Accès</dt><dd>${esc(AUD[e.audience])}</dd></div>
     <div><dt>Places restantes</dt><dd>${left == null ? "—" : Math.max(0, left)}</dd></div></dl>
@@ -710,7 +712,7 @@ async function sendTicket(d, holder) {
 function ticketCard(t, o) {
   const ev = o.events || {}, porteur = t.holder_name || profile?.full_name || "";
   const dat = `data-dl="${esc(t.code)}" data-ev="${esc(ev.title)}" data-kind="${esc(t.kind || "")}" data-when="${esc(ev.starts_at)}" data-venue="${esc(ev.venue || "")}" data-color="${esc(ev.color || "")}" data-tid="${esc(t.id || "")}"`;
-  return `<div class="tk ${esc(t.status)}"><div class="tk-main"><span class="tk-ev">${esc(ev.title)}</span><span class="tk-date">${dt(ev.starts_at)}</span>${ev.venue ? `<span class="tk-lieu">${esc(ev.venue)}</span>` : ""}
+  return `<div class="tk ${esc(t.status)}"><div class="tk-main"><span class="tk-ev">${esc(ev.title)}</span><span class="tk-date">${dt(ev.starts_at)}</span>${ev.venue ? `<span class="tk-lieu">${esc(ev.venue)}</span>` : ""}${mapsOk(ev.maps_url) ? `<a class="tk-lieu" href="${esc(mapsOk(ev.maps_url))}" target="_blank" rel="noopener noreferrer">📍 Itinéraire</a>` : ""}
     ${t.kind ? `<span class="tk-nom">Billet : <b>${esc(t.kind)}</b></span>` : ""}
     ${porteur ? `<span class="tk-nom">Porteur : <b>${esc(porteur)}</b></span>` : ""}
     <span class="tk-code">${esc(t.code)}</span><span class="badge ${esc(t.status)}">${BILLET[t.status] || esc(t.status)}</span>${t.status === "used" && t.used_at ? `<span class="petit-texte">Entrée le ${dts(t.used_at)}</span>` : ""}
@@ -741,19 +743,19 @@ const forgetTickets = () => { try { localStorage.removeItem(SAVED); } catch {} }
 const savedTickets = () => { try { return JSON.parse(localStorage.getItem(SAVED) || "[]"); } catch { return []; } };
 async function mePage() {
   if (!me) { location.hash = "#/login"; return; }
-  const { data, error: errO } = await sb.from("orders").select("*, events(title,starts_at,venue,color,slug,dress_code), tickets(id,code,status,used_at,holder_name,kind)").eq("user_id", me.id).order("created_at", { ascending: false });
+  const { data, error: errO } = await sb.from("orders").select("*, events(title,starts_at,venue,maps_url,color,slug,dress_code), tickets(id,code,status,used_at,holder_name,kind)").eq("user_id", me.id).order("created_at", { ascending: false });
   const p = profile || {};
   if (errO && !data) {
     const sv = savedTickets().filter(t => t.uid === me.id);
     if (sv.length) {
       show(`<div class="wrap"><h1 class="mini">Mes billets</h1><br>${flash("Pas de connexion : voici tes billets enregistrés sur cet appareil.")}<div class="tks">` +
-        sv.map(t => ticketCard({ code: t.code, status: "valid", holder_name: t.name, kind: t.kind }, { events: { title: t.title, starts_at: t.when, venue: t.venue, color: t.color } })).join("") + `</div></div>`);
+        sv.map(t => ticketCard({ code: t.code, status: "valid", holder_name: t.name, kind: t.kind }, { events: { title: t.title, starts_at: t.when, venue: t.venue, maps_url: t.maps, color: t.color } })).join("") + `</div></div>`);
       document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch {} });
       document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => (btn.hasAttribute("data-send") ? sendTicket : downloadTicket)(btn.dataset, sv.find(t => t.code === btn.dataset.dl)?.name || profile?.full_name || ""));
       return;
     }
   }
-  if (!errO && data) saveTickets(data.flatMap(o => (o.tickets || []).filter(t => t.status === "valid").map(t => ({ uid: me.id, code: t.code, name: t.holder_name || "", color: o.events?.color, title: o.events?.title || "", kind: t.kind || "", when: o.events?.starts_at, venue: o.events?.venue }))));
+  if (!errO && data) saveTickets(data.flatMap(o => (o.tickets || []).filter(t => t.status === "valid").map(t => ({ uid: me.id, code: t.code, name: t.holder_name || "", color: o.events?.color, title: o.events?.title || "", kind: t.kind || "", when: o.events?.starts_at, venue: o.events?.venue, maps: o.events?.maps_url || "" }))));
   const n = notice; notice = "";
   show(`<div class="wrap"><h1 class="mini">Bonjour ${esc(p.first_name || "")}</h1><br>${n ? flash(n, true) : ""}
     <div class="carte"><div class="ligne"><span><b>${esc(p.full_name || "")}</b> · ${esc(TYPES[p.account_type] || "")}</span></div>
@@ -942,6 +944,7 @@ async function adminEvents(box, editId) {
     <div class="grille"><label>Date et heure de l'événement<input id="d" type="datetime-local" required value="${loc(ed?.starts_at)}"></label></div>
     <div class="grille"><label>Ouverture de la billetterie (date et heure)<input id="o" type="datetime-local" required value="${loc(ed?.sales_open)}"></label><label>Fin de la billetterie (date et heure)<input id="sc" type="datetime-local" required value="${loc(ed?.sales_close || ed?.starts_at)}"></label></div>
     <div class="grille"><label>Lieu<input id="v" value="${val("venue")}" placeholder="IPNET Assiyeye"></label><label>Dress code<input id="dc" value="${val("dress_code")}" placeholder="All white"></label></div>
+    <label>Lien Google Maps du lieu (facultatif)<input id="mp" type="url" value="${val("maps_url")}" placeholder="https://maps.app.goo.gl/..."></label>
     <p class="petit-texte" style="margin-top:-.5rem">Heures saisies en heure de Lomé (UTC).</p>
     <div class="section">La vente</div>
     <div class="grille"><label>Numéro Mixx by Yas pour le paiement<input id="pay" required value="${val("pay_number")}" inputmode="numeric"></label>
@@ -1017,7 +1020,8 @@ async function adminEvents(box, editId) {
       if (n1.toLowerCase() === n2.toLowerCase() || /[<>]/.test(n1 + n2)) return fail("Les deux billets doivent avoir des noms différents (sans < ni >).");
       types = [{ name: n1, tiers }, { name: n2, tiers: tiers2 }];
     }
-    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", sales_close: $("sc").value + ":00Z", venue: $("v").value, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, pay_number_moov: $("pay2").value.trim() || null, audience: $("aud").value, capacity: +$("cap").value, tiers, types };
+    if ($("mp").value.trim() && !mapsOk($("mp").value)) return fail("Le lien de la carte doit commencer par https://");
+    const row = { title: $("t").value, tagline: $("s").value || null, slug: $("slug").value, starts_at: $("d").value + ":00Z", sales_open: $("o").value + ":00Z", sales_close: $("sc").value + ":00Z", venue: $("v").value, maps_url: mapsOk($("mp").value) || null, dress_code: $("dc").value, color: $("col").value, pay_number: $("pay").value, pay_number_moov: $("pay2").value.trim() || null, audience: $("aud").value, capacity: +$("cap").value, tiers, types };
     const files = [...$("bg").files];
     if (medias.length + files.length > 8) return fail("8 fonds maximum : retire-en quelques-uns avant d'en ajouter.");
     const kinds = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4", "video/webm": "webm" };
