@@ -465,10 +465,10 @@ async function eventPage(slug, others) {
 /* ---------- Connexion / inscription / mot de passe oublié ---------- */
 function loginPage(aud) {
   aud = ["all", "students"].includes(aud) ? aud : "all";
-  let mode = "login", resetMail = "";
+  let mode = "login", resetMail = "", verifMail = "";
   const typesOk = { all: ["visitor", "student"], students: ["student"] }[aud];
   const draw = (m = "") => {
-    const titre = { login: "Connexion", signup: "Créer un compte", forgot: "Mot de passe oublié", reset: "Nouveau mot de passe" }[mode];
+    const titre = { login: "Connexion", signup: "Créer un compte", forgot: "Mot de passe oublié", reset: "Nouveau mot de passe", verify: "Confirme ton email" }[mode];
     show(`<div class="wrap" style="max-width:480px"><h1 class="mini">${titre}</h1><br><div id="m">${m}</div>
       <form id="f" class="formcard" novalidate>
       ${mode === "signup" ? `
@@ -482,15 +482,17 @@ function loginPage(aud) {
         <label>Code reçu par email<input id="otp" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="······" required></label>
         <label>Nouveau mot de passe<input id="pw" type="password" autocomplete="new-password" required></label>
         <label>Confirmer le mot de passe<input id="pw2" type="password" autocomplete="new-password" required></label>
-        <p class="petit-texte" style="margin-top:-.6rem;margin-bottom:1rem">10 caractères minimum, avec majuscule, minuscule, chiffre et symbole (ex : ! ? @ #).</p>` : `
+        <p class="petit-texte" style="margin-top:-.6rem;margin-bottom:1rem">10 caractères minimum, avec majuscule, minuscule, chiffre et symbole (ex : ! ? @ #).</p>` : mode === "verify" ? `
+        <p style="margin-bottom:1rem">Un code de confirmation a été envoyé à <b>${esc(verifMail)}</b>. Saisis-le ci-dessous pour activer ton compte.</p>
+        <label>Code reçu par email<input id="otp" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="······" required></label>` : `
       <label>Email personnel<input id="mail" type="email" autocomplete="email" required></label>`}
-      ${mode === "signup" ? `<p class="petit-texte" style="margin-top:-.6rem;margin-bottom:1rem">Un lien de confirmation te sera envoyé par email.</p>` : ""}
+      ${mode === "signup" ? `<p class="petit-texte" style="margin-top:-.6rem;margin-bottom:1rem">Un code de confirmation te sera envoyé par email.</p>` : ""}
       ${mode === "login" || mode === "signup" ? `<label>Mot de passe<input id="pw" type="password" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" required></label>` : ""}
       ${mode === "signup" ? `<p class="petit-texte" style="margin-top:-.6rem;margin-bottom:1rem">10 caractères minimum, avec majuscule, minuscule, chiffre et symbole (ex : ! ? @ #).</p>` : ""}
       <div id="cap" style="margin-bottom:1rem"></div>
-      <button class="plein" id="go">${{ login: "Me connecter", signup: "Créer mon compte", forgot: "Recevoir un code", reset: "Changer mon mot de passe" }[mode]}</button></form><br>
+      <button class="plein" id="go">${{ login: "Me connecter", signup: "Créer mon compte", forgot: "Recevoir un code", reset: "Changer mon mot de passe", verify: "Valider mon code" }[mode]}</button></form><br>
       ${mode === "login" ? `<a href="#" data-m="forgot">Mot de passe oublié ?</a><br><br><a href="#" data-m="signup">Pas de compte ? S'inscrire</a>`
-        : mode === "reset" ? `<a href="#" id="resend">Renvoyer un code</a><br><br><a href="#" data-m="login">Retour à la connexion</a>`
+        : mode === "reset" || mode === "verify" ? `<a href="#" id="resend">Renvoyer un code</a><br><br><a href="#" data-m="login">Retour à la connexion</a>`
         : `<a href="#" data-m="login">J'ai déjà un compte</a>`}</div>`);
     document.querySelectorAll("[data-m]").forEach(a => a.onclick = ev => { ev.preventDefault(); mode = a.dataset.m; draw(); });
     boot();
@@ -502,7 +504,9 @@ function loginPage(aud) {
     if ($("resend")) $("resend").onclick = async ev => {
       ev.preventDefault();
       const token = cap.token(); if (cap.on && !token) return say("Valide le test anti-robot.");
-      const { error } = await sb.auth.resetPasswordForEmail(resetMail, { captchaToken: token });
+      const { error } = mode === "verify"
+        ? await sb.auth.resend({ type: "signup", email: verifMail, options: { captchaToken: token } })
+        : await sb.auth.resetPasswordForEmail(resetMail, { captchaToken: token });
       cap.reset();
       say(error?.status === 429 ? "Attends une minute avant de redemander un code." : "Un nouveau code vient d'être envoyé.", !error);
     };
@@ -523,6 +527,15 @@ function loginPage(aud) {
           if (u.error) { go.disabled = false; return say("Impossible de changer le mot de passe. Redemande un code."); }
           notice = "Mot de passe modifié. Tu es connecté."; welcome = true; location.hash = "#/"; route();
         } finally { resetBusy = false; }
+        return;
+      }
+      if (mode === "verify") { // confirmation de l'inscription avec le code reçu par email
+        const code = $("otp").value.trim();
+        if (code.length < 6) return say("Saisis le code reçu par email.");
+        go.disabled = true;
+        const v = await sb.auth.verifyOtp({ email: verifMail, token: code, type: "signup" });
+        if (v.error) { go.disabled = false; return say(v.error.status === 429 ? ERR["rate limit"] : "Code incorrect ou expiré. Redemande un code si besoin."); }
+        welcome = true; const to = afterLogin || "#/"; afterLogin = ""; location.hash = to; route();
         return;
       }
       const email = $("mail").value.trim().toLowerCase();
@@ -556,7 +569,7 @@ function loginPage(aud) {
       const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: baseUrl(), captchaToken: token, data: { first_name: first, last_name: last, phone, account_type: type } } });
       done();
       if (error) return say(error.status === 429 ? ERR["rate limit"] : "Inscription impossible. Vérifie tes informations (email valide, nom, téléphone).");
-      mode = "login"; draw(flash("Presque fini : clique sur le lien de confirmation reçu par email, puis connecte-toi. (Vérifie aussi tes spams.)", true));
+      verifMail = email; mode = "verify"; draw(flash("Presque fini : un code vient d'être envoyé par email. Saisis-le ici. (Vérifie aussi tes spams.)", true));
     };
   }
   draw();
