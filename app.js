@@ -162,7 +162,12 @@ async function route() {
   me = session?.user || null; lastUid = me?.id || null; profile = null;
   let aal2 = false;
   if (me) {
-    profile = (await sb.from("profiles").select("*").eq("id", me.id).maybeSingle()).data;
+    const pq = await sb.from("profiles").select("*").eq("id", me.id).maybeSingle();
+    profile = pq.data;
+    if (profile && ["admin", "controller"].includes(profile.role)) { try { localStorage.setItem("profil-cache", JSON.stringify(profile)); } catch {} }
+    else if (!profile && pq.error && (navigator.onLine === false || /fetch|network|load failed/i.test(pq.error.message || ""))) {
+      try { const c = JSON.parse(localStorage.getItem("profil-cache") || "null"); if (c && c.id === me.id) profile = c; } catch {}
+    }
     if (profile?.role === "admin") {
       const { data: l } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
       aal2 = l?.currentLevel === "aal2";
@@ -739,7 +744,7 @@ function rappel(data) {
 /* Copie des billets valides sur l'appareil, pour les afficher sans connexion à l'entrée */
 const SAVED = "billets-hors-ligne";
 const saveTickets = list => { try { localStorage.setItem(SAVED, JSON.stringify(list)); } catch {} };
-const forgetTickets = () => { try { localStorage.removeItem(SAVED); } catch {} };
+const forgetTickets = () => { try { localStorage.removeItem(SAVED); localStorage.removeItem("scan-liste"); localStorage.removeItem("profil-cache"); } catch {} };
 const savedTickets = () => { try { return JSON.parse(localStorage.getItem(SAVED) || "[]"); } catch { return []; } };
 async function mePage() {
   if (!me) { location.hash = "#/login"; return; }
@@ -808,7 +813,7 @@ function startIdle() {
   stopIdle();
   idleReset = () => {
     clearTimeout(idle);
-    idle = setTimeout(async () => { notice = "Déconnecté après 15 minutes d'inactivité."; await sb.auth.signOut(); location.hash = "#/login"; }, 15 * 60 * 1000);
+    idle = setTimeout(async () => { if (scanQueue().length) { idleReset(); return; } notice = "Déconnecté après 15 minutes d'inactivité."; await sb.auth.signOut(); location.hash = "#/login"; }, 15 * 60 * 1000);
   };
   ["pointerdown", "keydown", "scroll"].forEach(ev => addEventListener(ev, idleReset, { passive: true }));
   idleReset();
@@ -866,7 +871,7 @@ async function adminOrders(box) {
         <tr><th>Heure de la commande</th><td>${dts(o.created_at)} (heure de Lomé)</td></tr><tr><th>Code de commande</th><td>${esc(o.order_code)}</td></tr></table></div>
       ${o.status === "pending" ? `<a class="preuve" data-proofimg="${esc(o.proof_path)}" href="#" aria-label="Agrandir la capture"><span class="petit-texte">Chargement de la capture…</span></a>` : ""}
       <div class="ligne g">${o.status === "pending" ? "" : `<button class="petit" data-proof="${esc(o.proof_path)}">Voir la capture</button>`}
-      ${o.status === "pending" ? `<button class="petit plein" data-ok="${o.id}">Confirmer</button><button class="petit danger" data-no="${o.id}">Refuser</button>` : ""}</div>
+      ${o.status === "pending" ? `<button class="petit plein" data-ok="${o.id}">Confirmer</button><button class="petit danger" data-no="${o.id}">Refuser</button>` : `<button class="petit" data-wa="${o.id}">💬 Prévenir sur WhatsApp</button>`}</div>
       ${o.status === "confirmed" ? `<div class="billets">${(o.tickets || []).map(t => `<div class="billet ${t.status}"><b>${esc(t.code)}</b>${t.kind ? `<br><span class="petit-texte">${esc(t.kind)}</span>` : ""}<br><span class="badge ${t.status}">${BILLET[t.status]}</span>${t.status === "valid" ? `<br><button class="petit danger" data-cancel="${t.id}" style="margin-top:.4rem">Annuler</button>` : ""}</div>`).join("")}</div>` : ""}</div>`).join("")
       : "<p>Aucune commande dans cette liste.</p>");
   countUp(box);
@@ -895,6 +900,18 @@ async function adminOrders(box) {
   box.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => { if (confirm("Confirmer cette commande ?\nVérifie d'abord que l'argent est bien arrivé dans Mixx by Yas (montant, référence, numéro).")) act("admin_decide_order", { p_order: b.dataset.ok, p_decision: "confirm" }, "confetti"); });
   box.querySelectorAll("[data-no]").forEach(b => b.onclick = () => { if (confirm("Refuser cette commande ?")) act("admin_decide_order", { p_order: b.dataset.no, p_decision: "reject" }); });
   box.querySelectorAll("[data-cancel]").forEach(b => b.onclick = () => { if (confirm("Annuler ce billet ? Il sera refusé à l'entrée.")) act("admin_cancel_ticket", { p_ticket: b.dataset.cancel }); });
+  /* WhatsApp : ouvre la conversation avec le message déjà écrit, l'admin n'a plus qu'à envoyer */
+  box.querySelectorAll("[data-wa]").forEach(b => b.onclick = () => {
+    const o = data.find(x => x.id === b.dataset.wa); if (!o) return;
+    let num = String(o.profiles?.phone || "").replace(/\D/g, "").replace(/^00/, "");
+    if (num.length === 8) num = "228" + num;
+    if (num.length < 10) return alert("Le numéro de ce compte est invalide, impossible d'ouvrir WhatsApp.");
+    const ev = o.events?.title || "l'événement", nom = o.profiles?.full_name || "";
+    const msg = o.status === "confirmed"
+      ? `Bonjour ${nom}, ton paiement pour ${ev} est bien vérifié ✅\nTes ${o.qty} billet(s)${o.ticket_type ? " " + o.ticket_type : ""} sont prêts. Ouvre « Mes billets » pour les voir et les télécharger : ${baseUrl()}#/me\nÀ bientôt !`
+      : `Bonjour ${nom}, nous n'avons pas pu vérifier ton paiement pour ${ev} (commande ${o.order_code}). Contacte-nous ou refais ta commande sur ${baseUrl()}`;
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+  });
 }
 
 /* Les chiffres défilent jusqu'à leur valeur */
@@ -1130,38 +1147,168 @@ async function ticketPage(code) {
   if (r.data.found) { bip(r.data.result === "entered"); if (r.data.result === "entered") confetti(); }
 }
 
+/* ---------- Contrôle : liste des billets et entrées hors connexion ---------- */
+const SCANLIST = "scan-liste", SCANQ = "scan-file";
+const loadJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || "") ?? d; } catch { return d; } };
+const saveJ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const scanList = () => loadJ(SCANLIST, { at: null, t: {} });
+const scanQueue = () => loadJ(SCANQ, []);
+const norm = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const isNetErr = r => !!r.error && (navigator.onLine === false || /fetch|network|load failed|timeout/i.test(String(r.raw || "")));
+async function downloadScanList() {
+  const { data: evs, error } = await sb.from("events").select("id,title").eq("active", true);
+  if (error) return { error: error.message };
+  const t = {};
+  for (const e of evs || []) {
+    const r = await rpc("controller_ticket_list", { p_event: e.id });
+    if (r.error) return { error: r.error };
+    (r.data || []).forEach(x => { t[x.code] = { ...x, event: e.title, eid: e.id }; });
+  }
+  scanQueue().forEach(q => { if (t[q.code] && t[q.code].status === "valid") { t[q.code].status = "used"; t[q.code].used_at = q.at; } });
+  saveJ(SCANLIST, { at: new Date().toISOString(), t });
+  return { count: Object.keys(t).length };
+}
+function markLocal(code, used_at) {
+  const L = scanList(), x = L.t[String(code).toUpperCase()];
+  if (x) { x.status = "used"; x.used_at = used_at || new Date().toISOString(); saveJ(SCANLIST, L); }
+}
+function offlineScan(code, mark) {
+  const L = scanList(), k = String(code).toUpperCase(), x = L.t[k];
+  if (!x) return { found: false };
+  let res;
+  if (x.status === "cancelled") res = "cancelled";
+  else if (x.status === "used") res = "already_used";
+  else if (mark) {
+    const at = new Date().toISOString();
+    x.status = "used"; x.used_at = at; saveJ(SCANLIST, L);
+    const q = scanQueue(); if (!q.some(e => e.code === k)) { q.push({ code: k, at }); saveJ(SCANQ, q); }
+    res = "entered";
+  } else res = "valid";
+  const same = Object.values(L.t).filter(y => y.eid === x.eid);
+  return { found: true, result: res, holder: x.holder, buyer: x.buyer, phone: x.phone, account_type: x.account_type, event: x.event, order_code: x.order_code, qty: x.qty, kind: x.kind, used_at: x.used_at,
+    total: same.filter(y => y.status !== "cancelled").length, entered: same.filter(y => y.status === "used").length };
+}
+let syncing = false;
+async function syncQueue(done) {
+  const q = scanQueue(); if (!q.length || syncing || navigator.onLine === false) return;
+  syncing = true;
+  try {
+    const r = await rpc("controller_sync_entries", { p_entries: q });
+    if (r.error) return;
+    const sent = new Set(q.map(e => e.code));
+    saveJ(SCANQ, scanQueue().filter(e => !sent.has(e.code)));
+    const L = scanList(), out = r.data || [], bad = out.filter(x => x.result !== "entered");
+    bad.forEach(x => { if (x.result === "already_used" && L.t[x.code]) { L.t[x.code].status = "used"; L.t[x.code].used_at = x.used_at; } });
+    saveJ(SCANLIST, L);
+    if (done) done(out.length - bad.length, bad);
+  } finally { syncing = false; }
+}
+
 function adminScan(box) {
   box.innerHTML = `<div id="stats"></div>
     <div class="carte"><p class="petit-texte" style="margin-bottom:.8rem">Astuce : tu peux aussi scanner les QR avec l'appareil photo normal du téléphone, la page de validation s'ouvre toute seule.</p>
     <label class="radio"><input type="checkbox" id="auto" checked> Valider l'entrée automatiquement au scan</label>
     <div class="ligne g"><button class="plein" id="cam">Ouvrir le scanner</button><button type="button" id="camoff" hidden>Arrêter la caméra</button></div><div id="camz"></div>
     <form id="f" style="margin-top:1rem"><label>Ou saisis le code du billet<input id="code" autocomplete="off" required></label><button>Vérifier</button></form></div>
-    <div id="res"></div>`;
+    <div id="res"></div>
+    <div class="carte"><h3 style="margin-bottom:.6rem">Chercher un billet</h3>
+      <label>Nom, téléphone ou code<input id="q" autocomplete="off" placeholder="Ex : Kofi, 90 12 34…"></label><div id="qres"></div></div>
+    <div class="carte"><b>Mode hors connexion</b><p class="petit-texte" id="offst" style="margin:.4rem 0 .6rem"></p>
+      <div class="ligne g"><button type="button" class="petit" id="offdl">Mettre à jour la liste</button><button type="button" class="petit plein" id="offsync" hidden>Envoyer les entrées maintenant</button></div><div id="sync" style="margin-top:.6rem"></div></div>`;
   const res = $("res");
-  let last = "", lastT = 0, busy = false;
+  let last = "", lastT = 0, busy = false, noKind = false, qt = null;
 
+  /* Compteurs : total + par type de billet */
   async function loadStats() {
+    syncQueue(onSync);
     const r = await rpc("admin_entry_stats", {});
     if (!$("stats") || r.error) return;
-    $("stats").innerHTML = `<div class="stats">` + (r.data || []).map(s => `<div><b>${s.entered} / ${s.total}</b>entrées · ${esc(s.event)}<br>${Math.max(0, s.total - s.entered)} à venir</div>`).join("") + `</div>`;
+    let kinds = {};
+    if (!noKind) {
+      const k = await rpc("controller_kind_stats", {});
+      if (k.error) noKind = true; else (k.data || []).forEach(x => (kinds[x.event] = kinds[x.event] || []).push(x));
+    }
+    $("stats").innerHTML = `<div class="stats">` + (r.data || []).map(s => `<div><b>${s.entered} / ${s.total}</b>entrées · ${esc(s.event)}<br>${Math.max(0, s.total - s.entered)} à venir</div>`).join("") + `</div>` +
+      Object.entries(kinds).filter(([, a]) => a.some(x => x.kind)).map(([ev, a]) => `<p class="petit-texte" style="margin:.6rem 0 .3rem">${esc(ev)} · par type de billet</p><div class="stats">` + a.map(x => `<div><b>${x.entered} / ${x.total}</b>${esc(x.kind || "Sans type")}</div>`).join("") + `</div>`).join("");
   }
   loadStats(); clearInterval(timer); timer = setInterval(loadStats, 8000);
 
-  function render(d, code) {
+  /* Mode hors connexion : état + envoi */
+  function refreshOff() {
+    const L = scanList(), n = scanQueue().length;
+    if ($("offst")) $("offst").textContent = L.at
+      ? `Liste enregistrée sur ce téléphone : ${Object.keys(L.t).length} billet(s), mise à jour à ${new Date(L.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.${n ? ` ${n} entrée(s) en attente d'envoi.` : ""}`
+      : "Aucune liste enregistrée. Connecte-toi à internet pour la charger : elle permet de scanner sans réseau.";
+    if ($("offsync")) $("offsync").hidden = !n;
+  }
+  function onSync(ok, bad) {
+    refreshOff(); const z = $("sync"); if (!z) return;
+    const L = scanList();
+    const why = x => x.result === "already_used" ? `déjà entré à ${dts(x.used_at)} (double entrée possible)` : x.result === "cancelled" ? "billet annulé" : "billet inconnu";
+    z.innerHTML = (ok ? `<div class="msg ok" role="alert">${ok} entrée(s) hors connexion envoyée(s).</div>` : "") +
+      (bad.length ? `<div class="msg" role="alert"><b>À vérifier :</b><br>${bad.map(x => `${esc(L.t[x.code]?.holder || x.code)} (${esc(x.code)}) : ${esc(why(x))}`).join("<br>")}</div>` : "");
+  }
+  $("offdl").onclick = async () => {
+    $("offdl").disabled = true; $("offdl").textContent = "Chargement…";
+    const d = await downloadScanList();
+    $("offdl").disabled = false; $("offdl").textContent = "Mettre à jour la liste";
+    $("sync").innerHTML = d.error ? flash("Impossible de charger la liste : " + d.error) : "";
+    refreshOff();
+  };
+  $("offsync").onclick = () => { if (navigator.onLine === false) return alert("Pas de connexion pour le moment."); syncQueue(onSync); };
+  refreshOff();
+  { const L0 = scanList(); if (navigator.onLine !== false && (!L0.at || Date.now() - Date.parse(L0.at) > 30 * 60 * 1000)) downloadScanList().then(refreshOff); }
+
+  /* Valider un billet : en ligne si possible, sinon avec la liste du téléphone */
+  async function validate(code, mark) {
+    if (navigator.onLine !== false) {
+      const r = await rpc("admin_scan_ticket", { p_code: code, p_mark: mark });
+      if (!isNetErr(r)) {
+        if (!r.error && r.data?.found && (r.data.result === "entered" || r.data.result === "already_used")) markLocal(code, r.data.used_at);
+        return r;
+      }
+    }
+    if (!scanList().at) return { error: "Pas de connexion et aucune liste enregistrée sur ce téléphone. Ouvre cette page avec internet pour charger la liste." };
+    return { data: offlineScan(code, mark), offline: true };
+  }
+
+  function render(d, code, offline) {
     bip(d.found && (d.result === "entered" || d.result === "valid"));
-    res.innerHTML = scanHtml(d);
-    if ($("use")) $("use").onclick = async () => { const u = await rpc("admin_scan_ticket", { p_code: code, p_mark: true }); if (u.error) res.innerHTML = flash(u.error); else { render(u.data, code); confetti(); loadStats(); } };
+    res.innerHTML = (offline ? `<p class="petit-texte" style="margin-bottom:.5rem">📴 Hors connexion : vérifié avec la liste enregistrée sur ce téléphone.${d.found ? "" : " Si le billet est récent, la liste n'est peut-être pas à jour."}</p>` : "") + scanHtml(d);
+    if ($("use")) $("use").onclick = async () => { const u = await validate(code, true); if (u.error) res.innerHTML = flash(u.error); else { render(u.data, code, u.offline); confetti(); loadStats(); refreshOff(); } };
     if (d.result === "entered") confetti();
   }
   async function scan(raw) {
     const code = codeOf(raw);
     if (busy || !code) return; busy = true;
     try {
-      const r = await rpc("admin_scan_ticket", { p_code: code, p_mark: $("auto").checked });
-      if (r.error) res.innerHTML = flash(`${r.error} [${r.raw || ""}] · lu : ${code}`); else { render(r.data, code); loadStats(); }
+      const r = await validate(code, $("auto").checked);
+      if (r.error) res.innerHTML = flash(`${r.error} [${r.raw || ""}] · lu : ${code}`); else { render(r.data, code, r.offline); loadStats(); refreshOff(); }
     } finally { busy = false; }
   }
   $("f").onsubmit = ev => { ev.preventDefault(); scan($("code").value); };
+
+  /* Recherche par nom, téléphone ou code (quand le QR est perdu) */
+  async function doSearch() {
+    const v = norm($("q").value).trim(), z = $("qres");
+    if (v.length < 2) { z.innerHTML = ""; return; }
+    let L = scanList();
+    if (!L.at) {
+      if (navigator.onLine === false) { z.innerHTML = `<p class="petit-texte">Aucune liste enregistrée et pas de connexion.</p>`; return; }
+      z.innerHTML = `<p class="petit-texte">Chargement de la liste…</p>`;
+      const d = await downloadScanList(); if (d.error) { z.innerHTML = flash("Liste indisponible : " + d.error); return; }
+      L = scanList(); refreshOff();
+    }
+    const words = v.split(/\s+/);
+    const hits = Object.values(L.t).filter(x => { const h = norm([x.holder, x.buyer, x.phone, String(x.phone || "").replace(/\D/g, ""), x.code, x.order_code].join(" ")); return words.every(w => h.includes(w)); }).slice(0, 15);
+    z.innerHTML = hits.length ? hits.map(x => `<div class="carte" style="margin:.5rem 0"><div class="ligne"><span><b>${esc(x.holder)}</b>${x.kind ? ` <span class="badge confirmed">${esc(x.kind)}</span>` : ""}<br><span class="petit-texte">${esc(x.event)} · ${esc(x.phone)} · ${esc(x.code)}</span></span><span class="badge ${esc(x.status)}">${BILLET[x.status] || esc(x.status)}${x.status === "used" && x.used_at ? " " + dts(x.used_at) : ""}</span></div>${x.status === "valid" ? `<button class="petit plein" data-v="${esc(x.code)}" style="margin-top:.4rem">Valider l'entrée</button>` : ""}</div>`).join("") : `<p class="petit-texte">Aucun billet trouvé. Si l'achat est très récent, mets la liste à jour.</p>`;
+    z.querySelectorAll("[data-v]").forEach(b => b.onclick = async () => {
+      const r = await validate(b.dataset.v, true);
+      if (r.error) res.innerHTML = flash(r.error); else { render(r.data, b.dataset.v, r.offline); loadStats(); refreshOff(); }
+      res.scrollIntoView({ behavior: "smooth", block: "center" }); doSearch();
+    });
+  }
+  $("q").oninput = () => { clearTimeout(qt); qt = setTimeout(doSearch, 200); };
 
   $("camoff").onclick = () => { stopCam(); $("camz").innerHTML = ""; $("camoff").hidden = true; $("cam").hidden = false; };
   $("cam").onclick = async () => {
