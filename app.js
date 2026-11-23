@@ -660,6 +660,19 @@ async function ticketBlob(d, holder) {
   // textes
   x.textAlign = "left"; x.textBaseline = "alphabetic"; x.fillStyle = col; x.font = "800 26px 'DM Sans', sans-serif";
   if (x.letterSpacing !== undefined) x.letterSpacing = "6px"; x.fillText("IPNET EVENTS  ·  BILLET", 70, 88); if (x.letterSpacing !== undefined) x.letterSpacing = "0px";
+  // type de billet (Standard, Premium, VIP… tel que nommé par l'admin) : pastille en haut à droite
+  if (d.kind) {
+    const label = String(d.kind).toUpperCase(); let ks = 30;
+    const setK = () => { x.font = `800 ${ks}px 'Sora', sans-serif`; };
+    if (x.letterSpacing !== undefined) x.letterSpacing = "3px";
+    setK(); while (x.measureText(label).width > 280 && ks > 18) { ks -= 2; setK(); }
+    const bw = x.measureText(label).width + 56, bh = 60, bx = SX - 50 - bw, by = 46;
+    x.fillStyle = col; roundRect(x, bx, by, bw, bh, 30); x.fill();
+    const [kr, kg, kb] = mixHex(col, 1); x.fillStyle = (0.299 * kr + 0.587 * kg + 0.114 * kb) > 160 ? "#0a0820" : "#ffffff";
+    x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(label, bx + bw / 2, by + bh / 2 + 2);
+    if (x.letterSpacing !== undefined) x.letterSpacing = "0px";
+    x.textAlign = "left"; x.textBaseline = "alphabetic";
+  }
   x.fillStyle = "#ffffff"; let size = 84, lines;
   do { x.font = `800 ${size}px 'Sora', sans-serif`; lines = wrapLines(x, d.ev, SX - 130, 2); size -= 4; } while (lines.some(l => x.measureText(l).width > SX - 130) && size > 40);
   lines.forEach((l, i) => x.fillText(l, 70, 190 + i * (size + 22)));
@@ -696,7 +709,7 @@ async function sendTicket(d, holder) {
 /* ---------- Dashboard utilisateur ---------- */
 function ticketCard(t, o) {
   const ev = o.events || {}, porteur = t.holder_name || profile?.full_name || "";
-  const dat = `data-dl="${esc(t.code)}" data-ev="${esc(ev.title + (t.kind ? " · " + t.kind : ""))}" data-when="${esc(ev.starts_at)}" data-venue="${esc(ev.venue || "")}" data-color="${esc(ev.color || "")}" data-tid="${esc(t.id || "")}"`;
+  const dat = `data-dl="${esc(t.code)}" data-ev="${esc(ev.title)}" data-kind="${esc(t.kind || "")}" data-when="${esc(ev.starts_at)}" data-venue="${esc(ev.venue || "")}" data-color="${esc(ev.color || "")}" data-tid="${esc(t.id || "")}"`;
   return `<div class="tk ${esc(t.status)}"><div class="tk-main"><span class="tk-ev">${esc(ev.title)}</span><span class="tk-date">${dt(ev.starts_at)}</span>${ev.venue ? `<span class="tk-lieu">${esc(ev.venue)}</span>` : ""}
     ${t.kind ? `<span class="tk-nom">Billet : <b>${esc(t.kind)}</b></span>` : ""}
     ${porteur ? `<span class="tk-nom">Porteur : <b>${esc(porteur)}</b></span>` : ""}
@@ -734,13 +747,13 @@ async function mePage() {
     const sv = savedTickets().filter(t => t.uid === me.id);
     if (sv.length) {
       show(`<div class="wrap"><h1 class="mini">Mes billets</h1><br>${flash("Pas de connexion : voici tes billets enregistrés sur cet appareil.")}<div class="tks">` +
-        sv.map(t => ticketCard({ code: t.code, status: "valid", holder_name: t.name }, { events: { title: t.title, starts_at: t.when, venue: t.venue, color: t.color } })).join("") + `</div></div>`);
+        sv.map(t => ticketCard({ code: t.code, status: "valid", holder_name: t.name, kind: t.kind }, { events: { title: t.title, starts_at: t.when, venue: t.venue, color: t.color } })).join("") + `</div></div>`);
       document.querySelectorAll("[data-qr]").forEach(async i => { try { i.src = await QRCode.toDataURL(i.dataset.qr, { width: 240, margin: 2, errorCorrectionLevel: "L" }); } catch {} });
       document.querySelectorAll("[data-dl]").forEach(btn => btn.onclick = () => (btn.hasAttribute("data-send") ? sendTicket : downloadTicket)(btn.dataset, sv.find(t => t.code === btn.dataset.dl)?.name || profile?.full_name || ""));
       return;
     }
   }
-  if (!errO && data) saveTickets(data.flatMap(o => (o.tickets || []).filter(t => t.status === "valid").map(t => ({ uid: me.id, code: t.code, name: t.holder_name || "", color: o.events?.color, title: (o.events?.title || "") + (t.kind ? " · " + t.kind : ""), when: o.events?.starts_at, venue: o.events?.venue }))));
+  if (!errO && data) saveTickets(data.flatMap(o => (o.tickets || []).filter(t => t.status === "valid").map(t => ({ uid: me.id, code: t.code, name: t.holder_name || "", color: o.events?.color, title: o.events?.title || "", kind: t.kind || "", when: o.events?.starts_at, venue: o.events?.venue }))));
   const n = notice; notice = "";
   show(`<div class="wrap"><h1 class="mini">Bonjour ${esc(p.first_name || "")}</h1><br>${n ? flash(n, true) : ""}
     <div class="carte"><div class="ligne"><span><b>${esc(p.full_name || "")}</b> · ${esc(TYPES[p.account_type] || "")}</span></div>
@@ -1090,7 +1103,7 @@ function scanHtml(d) {
   const sous = d.result === "already_used" ? `Déjà entré à ${dts(d.used_at)} : refuser l'entrée.` : d.result === "cancelled" ? "Refuser l'entrée." : "";
   return `<div class="scanres ${ok || valid ? "ok" : "ko"}"><b>${titre}</b>${sous ? `<span>${esc(sous)}</span>` : ""}
     <div class="scanbig">${esc(d.entered)} / ${esc(d.total)} entrées</div></div>
-    <div class="carte"><b style="font-size:1.2rem">${esc(d.holder)}</b>${d.kind ? ` <span class="badge confirmed">${esc(d.kind)}</span>` : ""}<div class="scroll"><table class="cmp">
+    <div class="carte"><b style="font-size:1.2rem">${esc(d.holder)}</b>${d.kind ? `<div style="margin:.5rem 0"><span class="badge confirmed" style="font-size:1.15rem;padding:.4rem 1rem">${esc(d.kind)}</span></div>` : ""}<div class="scroll"><table class="cmp">
       ${d.buyer && d.buyer !== d.holder ? `<tr><th>Acheté par</th><td>${esc(d.buyer)}</td></tr>` : ""}<tr><th>Téléphone</th><td>${esc(d.phone)}</td></tr><tr><th>Type</th><td>${esc(TYPES[d.account_type])}</td></tr>
       <tr><th>Événement</th><td>${esc(d.event)}</td></tr><tr><th>Commande</th><td>${esc(d.order_code)} (${esc(d.qty)} billet(s))</td></tr></table></div>
     ${d.account_type === "student" && (ok || valid) ? `<p class="petit-texte">Étudiant déclaré : demande la carte d'étudiant si besoin.</p>` : ""}
